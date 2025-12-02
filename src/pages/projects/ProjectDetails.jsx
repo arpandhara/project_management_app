@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Clock
 } from "lucide-react";
+import NewTaskModal from "../../components/specific/NewTaskModal";
 
 const ProjectDetails = () => {
   const { id } = useParams();

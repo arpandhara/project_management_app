@@ -1,7 +1,7 @@
 import React , {useState} from "react";
 import { Plus, Search, Filter, MoreVertical } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import NewProjectModal from "../../components/common/NewProjectModal";
+import NewProjectModal from "../../components/specific/NewProjectModal";
 
 const ProjectList = () => {
   const navigate = useNavigate();
