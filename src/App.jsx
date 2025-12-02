@@ -13,6 +13,12 @@ import LoginPage from './pages/auth/LoginPage';
 import SignUpPage from './pages/auth/SignUpPage';
 
 const App = () => {
+  const { getToken } = useAuth();
+
+  useEffect(() => {
+    setupInterceptors(getToken);
+  }, [getToken]);
+
   return (
     <Routes>
       {/* Public Routes - Login & Sign Up */}

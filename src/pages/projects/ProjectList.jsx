@@ -2,33 +2,31 @@ import React , {useState} from "react";
 import { Plus, Search, Filter, MoreVertical } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import NewProjectModal from "../../components/specific/NewProjectModal";
+import api from "../../services/api";
 
 const ProjectList = () => {
   const navigate = useNavigate();
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const projects = [
-    {
-      id: 1,
-      title: "Kubernetes Migration",
-      desc: "Migrate the monolithic app infrastructure to Kubernetes for scalability.",
-      status: "ACTIVE",
-      priority: "HIGH",
-      progress: 0,
-      members: 3,
-      dueDate: "Jan 20, 2026",
-    },
-    {
-      id: 2,
-      title: "Project: Automated Regression Suite",
-      desc: "Selenium + Playwright hybrid test framework for regression testing.",
-      status: "ACTIVE",
-      priority: "MEDIUM",
-      progress: 0,
-      members: 3,
-      dueDate: "Oct 15, 2025",
-    },
-  ];
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        // This call now automatically has the Clerk Token attached!
+        const response = await api.get("/projects"); 
+        setProjects(response.data);
+      } catch (error) {
+        console.error("Failed to fetch projects", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProjects();
+  }, []);
+
+  if (loading) return <div>Loading...</div>;
 
   return (
     <div className="space-y-6">
