@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Search, MoreVertical, Trash2, Calendar, User as UserIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useUser } from "@clerk/clerk-react";
+import { useUser , useAuth} from "@clerk/clerk-react";
 import NewProjectModal from "../../components/specific/NewProjectModal";
 import api from "../../services/api";
 
@@ -11,6 +11,7 @@ const ProjectList = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const {orgId} = useAuth();
   
   // Track which dropdown is open (by project ID)
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -30,7 +31,7 @@ const ProjectList = () => {
 
   useEffect(() => {
     fetchProjects();
-  }, []);
+  }, [orgId]);
 
   // Handle Delete
   const handleDelete = async (e, projectId) => {
@@ -39,6 +40,9 @@ const ProjectList = () => {
 
     try {
       await api.delete(`/projects/${projectId}`);
+
+      window.dispatchEvent(new Event("projectUpdate"));
+
       setProjects(projects.filter(p => p._id !== projectId && p.id !== projectId));
       setOpenMenuId(null);
     } catch (error) {

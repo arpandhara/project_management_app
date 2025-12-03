@@ -2,11 +2,13 @@ import React, { useState, useEffect } from "react";
 import { Folder, CheckCircle, Clock, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "../../services/api"; // Import API helper
+import { useAuth } from "@clerk/clerk-react";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { orgId } = useAuth();
 
   // Fetch Projects on Mount
   useEffect(() => {
@@ -24,7 +26,7 @@ const Dashboard = () => {
     };
 
     fetchDashboardData();
-  }, []);
+  }, [orgId]);
 
   return (
     <div className="space-y-8">

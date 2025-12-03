@@ -17,6 +17,9 @@ const NewProjectModal = ({ isOpen, onClose, onProjectCreated }) => {
     setLoading(true);
     try {
       await api.post("/projects", formData);
+
+      window.dispatchEvent(new Event("projectUpdate"));
+
       if (onProjectCreated) onProjectCreated();
       onClose();
       setFormData({ title: "", description: "", priority: "MEDIUM" });
