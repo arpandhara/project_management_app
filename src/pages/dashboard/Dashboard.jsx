@@ -14,7 +14,9 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const response = await api.get("/projects");
+        const response = await api.get("/projects", {
+          params: { orgId: orgId || "" },
+        });
         if (Array.isArray(response.data)) {
           setProjects(response.data);
         }

@@ -21,7 +21,9 @@ function Sidebar() {
 
   const fetchSidebarProjects = async () => {
     try {
-      const response = await api.get("/projects");
+      const response = await api.get("/projects", {
+        params: { orgId: orgId || "" } 
+      });
       if (Array.isArray(response.data)) {
         setProjects(response.data);
       }
@@ -58,10 +60,24 @@ function Sidebar() {
             elements: {
               rootBox: "w-full",
               organizationSwitcherTrigger:
-                "w-full flex items-center justify-between p-2 rounded-md hover:bg-neutral-800 text-white",
-              organizationPreviewTextContainer: "ml-2",
-              organizationPreviewText: "font-bold text-sm",
+                "w-full flex items-center justify-between p-2 rounded-md hover:bg-neutral-800 transition-colors border border-neutral-800 bg-neutral-900",
+              organizationPreviewTextContainer: "ml-2 text-white",
+              organizationPreviewText: "font-medium text-sm text-white",
+              organizationSwitcherTriggerIcon: "text-neutral-400",
+              organizationSwitcherPopoverCard: "bg-neutral-900 border border-neutral-800",
+              organizationSwitcherPopoverActionButton: "text-white hover:bg-neutral-800 hover:text-white", // "Manage organization" text
+              organizationSwitcherPopoverActionButtonIcon: "text-white", // "Manage organization" icon
+              userPreviewTextContainer: "ml-2 text-white",
+              userPreviewText: "font-medium text-sm text-white",
+              userPreviewSecondaryText: "text-neutral-400",
             },
+            variables: {
+              colorText: "white", // Forces internal text to white
+              colorTextSecondary: "#a3a3a3", // Muted text color
+              colorBackground: "#171717", // Dropdown background
+              colorInputBackground: "#171717",
+              colorInputText: "white"
+            }
           }}
         />
       </div>
@@ -133,7 +149,7 @@ function Sidebar() {
                 className="flex items-center gap-2 px-2 py-1.5 text-sm text-neutral-400 hover:text-white cursor-pointer rounded hover:bg-neutral-800/50 transition-colors group"
               >
                 <span
-                  className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                  className={`w-2 h-2 rounded-full shrink-0 ${
                     project.status === "ACTIVE"
                       ? "bg-green-500"
                       : "bg-neutral-600"

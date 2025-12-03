@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Search, MoreVertical, Trash2, Calendar, User as UserIcon } from "lucide-react";
+import {
+  Plus,
+  Search,
+  MoreVertical,
+  Trash2,
+  Calendar,
+  User as UserIcon,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useUser , useAuth} from "@clerk/clerk-react";
+import { useUser, useAuth } from "@clerk/clerk-react";
 import NewProjectModal from "../../components/specific/NewProjectModal";
 import api from "../../services/api";
 
@@ -11,8 +18,8 @@ const ProjectList = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const {orgId} = useAuth();
-  
+  const { orgId } = useAuth();
+
   // Track which dropdown is open (by project ID)
   const [openMenuId, setOpenMenuId] = useState(null);
 
@@ -20,7 +27,9 @@ const ProjectList = () => {
 
   const fetchProjects = async () => {
     try {
-      const response = await api.get("/projects");
+      const response = await api.get("/projects", {
+        params: { orgId: orgId || "" },
+      });
       setProjects(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error("Failed to fetch projects", error);
@@ -36,14 +45,17 @@ const ProjectList = () => {
   // Handle Delete
   const handleDelete = async (e, projectId) => {
     e.stopPropagation(); // Stop navigation to details
-    if (!window.confirm("Are you sure you want to delete this project?")) return;
+    if (!window.confirm("Are you sure you want to delete this project?"))
+      return;
 
     try {
       await api.delete(`/projects/${projectId}`);
 
       window.dispatchEvent(new Event("projectUpdate"));
 
-      setProjects(projects.filter(p => p._id !== projectId && p.id !== projectId));
+      setProjects(
+        projects.filter((p) => p._id !== projectId && p.id !== projectId)
+      );
       setOpenMenuId(null);
     } catch (error) {
       console.error("Failed to delete project", error);
@@ -57,21 +69,24 @@ const ProjectList = () => {
     setOpenMenuId(openMenuId === projectId ? null : projectId);
   };
 
-  if (loading) return <div className="p-8 text-neutral-400">Loading projects...</div>;
+  if (loading)
+    return <div className="p-8 text-neutral-400">Loading projects...</div>;
 
   return (
-    <div className="space-y-6" onClick={() => setOpenMenuId(null)}> 
+    <div className="space-y-6" onClick={() => setOpenMenuId(null)}>
       {/* Click anywhere to close menu */}
-      
+
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold">Projects</h1>
-          <p className="text-neutral-400 mt-1">Manage and track your projects</p>
+          <p className="text-neutral-400 mt-1">
+            Manage and track your projects
+          </p>
         </div>
         {isAdmin && (
-          <button 
-            onClick={() => setIsModalOpen(true)} 
+          <button
+            onClick={() => setIsModalOpen(true)}
             className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-colors"
           >
             <Plus size={16} /> New Project
@@ -86,8 +101,8 @@ const ProjectList = () => {
           projects.map((project) => {
             const pid = project._id || project.id;
             return (
-              <div 
-                key={pid} 
+              <div
+                key={pid}
                 onClick={() => navigate(`/projects/${pid}`)}
                 className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 hover:border-neutral-700 transition-all cursor-pointer group relative"
               >
@@ -96,21 +111,21 @@ const ProjectList = () => {
                   <h3 className="font-semibold text-lg text-white group-hover:text-blue-400 transition-colors">
                     {project.title}
                   </h3>
-                  
+
                   {/* Three Dots Menu - Only show for Admin */}
                   {isAdmin && (
                     <div className="relative">
-                      <button 
-                        className="text-neutral-500 hover:text-white p-1 rounded-md hover:bg-neutral-800 transition-colors" 
+                      <button
+                        className="text-neutral-500 hover:text-white p-1 rounded-md hover:bg-neutral-800 transition-colors"
                         onClick={(e) => toggleMenu(e, pid)}
                       >
                         <MoreVertical size={18} />
                       </button>
-                      
+
                       {/* Dropdown */}
                       {openMenuId === pid && (
                         <div className="absolute right-0 top-full mt-2 w-40 bg-neutral-950 border border-neutral-800 rounded-lg shadow-xl z-10 overflow-hidden">
-                          <button 
+                          <button
                             onClick={(e) => handleDelete(e, pid)}
                             className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-400 hover:bg-neutral-900 transition-colors text-left"
                           >
@@ -128,28 +143,39 @@ const ProjectList = () => {
 
                 {/* Meta Info (Date & Creator) */}
                 <div className="flex items-center gap-4 mb-4 text-xs text-neutral-500 border-b border-neutral-800 pb-4">
-                   <div className="flex items-center gap-1.5">
-                      <Calendar size={14} />
-                      <span>{new Date(project.createdAt).toLocaleDateString()}</span>
-                   </div>
-                   <div className="flex items-center gap-1.5">
-                      <UserIcon size={14} />
-                      <span className="truncate max-w-[100px]" title={project.ownerId}>
-                        Admin {/* Backend doesn't send name yet, using placeholder */}
-                      </span>
-                   </div>
+                  <div className="flex items-center gap-1.5">
+                    <Calendar size={14} />
+                    <span>
+                      {new Date(project.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <UserIcon size={14} />
+                    <span
+                      className="truncate max-w-[100px]"
+                      title={project.ownerId}
+                    >
+                      Admin{" "}
+                      {/* Backend doesn't send name yet, using placeholder */}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Status & Priority Tags */}
                 <div className="flex items-center justify-between">
                   <span className="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded font-medium">
-                    {project.status || 'ACTIVE'}
+                    {project.status || "ACTIVE"}
                   </span>
-                  <span className={`text-xs font-bold uppercase ${
-                    project.priority === 'HIGH' ? 'text-orange-400' : 
-                    project.priority === 'LOW' ? 'text-blue-400' : 'text-neutral-400'
-                  }`}>
-                    {project.priority || 'MEDIUM'} Priority
+                  <span
+                    className={`text-xs font-bold uppercase ${
+                      project.priority === "HIGH"
+                        ? "text-orange-400"
+                        : project.priority === "LOW"
+                        ? "text-blue-400"
+                        : "text-neutral-400"
+                    }`}
+                  >
+                    {project.priority || "MEDIUM"} Priority
                   </span>
                 </div>
               </div>
@@ -161,11 +187,11 @@ const ProjectList = () => {
           </div>
         )}
       </div>
-      
-      <NewProjectModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        onProjectCreated={fetchProjects} 
+
+      <NewProjectModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onProjectCreated={fetchProjects}
       />
     </div>
   );
