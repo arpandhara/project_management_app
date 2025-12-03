@@ -1,13 +1,15 @@
 import React, { useState } from "react";
+import { useAuth } from "@clerk/clerk-react";
 import Modal from "../common/Modal";
 import api from "../../services/api";
 
 const NewProjectModal = ({ isOpen, onClose, onProjectCreated }) => {
+  const { orgId } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    priority: "MEDIUM", // Default value
+    priority: "LOW", // Default value
   });
 
   const handleSubmit = async (e) => {
@@ -16,7 +18,10 @@ const NewProjectModal = ({ isOpen, onClose, onProjectCreated }) => {
 
     setLoading(true);
     try {
-      await api.post("/projects", formData);
+      await api.post("/projects", {
+        ...formData,
+        orgId : orgId
+      });
 
       window.dispatchEvent(new Event("projectUpdate"));
 

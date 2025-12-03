@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { useClerk, useAuth, OrganizationSwitcher } from "@clerk/clerk-react";
+import { useClerk, useAuth, OrganizationSwitcher , useUser } from "@clerk/clerk-react";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -10,10 +10,12 @@ import {
   Plus,
   ChevronDown,
   LogOut,
+  Mail
 } from "lucide-react";
 import api from "../../services/api";
 
 function Sidebar() {
+  const { user } = useUser();
   const { signOut } = useClerk();
   const { orgId } = useAuth();
   const navigate = useNavigate();
@@ -26,6 +28,8 @@ function Sidebar() {
       });
       if (Array.isArray(response.data)) {
         setProjects(response.data);
+      }else {
+        setProjects([]);
       }
     } catch (error) {
       console.error("Sidebar project fetch error:", error);
@@ -45,10 +49,16 @@ function Sidebar() {
     };
   }, [orgId]);
 
+  const inviteCount = user?.emailAddresses?.reduce((acc, email) => {
+    return acc + (email.invitations?.length || 0);
+  }, 0) || 0;
+
   const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/" },
     { icon: FolderKanban, label: "Projects", path: "/projects" },
-    { icon: Users, label: "Team", path: "/team" },
+    // Conditionally add Team item
+    ...(orgId ? [{ icon: Users, label: "Team", path: "/team" }] : []),
+    { icon: Mail, label: "Invitations", path: "/invitations", badge: inviteCount },
     { icon: Settings, label: "Settings", path: "/settings" },
   ];
   return (

@@ -11,7 +11,7 @@ import TeamList from './pages/team/TeamList';
 import Settings from './pages/settings/Settings';
 import LoginPage from './pages/auth/LoginPage';
 import SignUpPage from './pages/auth/SignUpPage';
-
+import Invitations from './pages/team/Invitations';
 // API Helper
 import { setupInterceptors } from "./services/api";
 
@@ -46,6 +46,7 @@ const App = () => {
             <Route path="projects/:id" element={<ProjectDetails />} />
             <Route path="team" element={<TeamList />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="invitations" element={<Invitations />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

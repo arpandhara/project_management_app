@@ -19,6 +19,8 @@ const Dashboard = () => {
         });
         if (Array.isArray(response.data)) {
           setProjects(response.data);
+        }else {
+          setProjects([]);
         }
       } catch (error) {
         console.error("Failed to load dashboard data", error);
