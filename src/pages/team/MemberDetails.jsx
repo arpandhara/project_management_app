@@ -35,9 +35,11 @@ const MemberDetails = () => {
   const isMe = userId === currentUser?.id;
 
   // Check if *I* am an admin
-  const iAmAdmin =
-    memberships?.data?.find((m) => m.publicUserData.userId === currentUser?.id)
-      ?.role === "org:admin";
+  const iAmAdmin = 
+    // Check Organization Role
+    memberships?.data?.find((m) => m.publicUserData.userId === currentUser?.id)?.role === "org:admin" || 
+    // Check Global/Database Role (saved in Clerk publicMetadata)
+    currentUser?.publicMetadata?.role === "admin";
   const targetIsAdmin = member?.role === "org:admin";
 
   useEffect(() => {
