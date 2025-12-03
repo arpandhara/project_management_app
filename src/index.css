@@ -14,3 +14,29 @@ body {
   min-height: 100vh;
   @apply bg-neutral-950 text-neutral-100; /* Dark background base */
 }
+
+::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+  display: none; 
+}
+
+/* For Firefox, IE, and Edge */
+* {
+  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;  /* IE and Edge */
+}
+
+.cl-organizationSwitcherPopoverActionButton {
+  display: none !important;
+}
+
+/* 2. EXCEPTION: Force the "Create Organization" button in the footer to stay visible */
+.cl-organizationSwitcherPopoverFooter .cl-organizationSwitcherPopoverActionButton {
+  display: flex !important;
+}
+
+/* Backup: Hide button specifically by partial label text if class names shift */
+button[aria-label*="Manage"] {
+  display: none !important;
+}

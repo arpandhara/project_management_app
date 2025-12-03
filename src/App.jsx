@@ -13,6 +13,7 @@ import LoginPage from "./pages/auth/LoginPage";
 import SignUpPage from "./pages/auth/SignUpPage";
 import Invitations from "./pages/team/Invitations";
 import MemberDetails from "./pages/team/MemberDetails";
+import CreateOrganizationPage from "./pages/organization/CreateOrganizationPage";
 // API Helper
 import { setupInterceptors } from "./services/api";
 
@@ -49,6 +50,7 @@ const App = () => {
             <Route path="settings" element={<Settings />} />
             <Route path="invitations" element={<Invitations />} />
             <Route path="team/:userId" element={<MemberDetails />} />
+            <Route path="create-organization" element={<CreateOrganizationPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

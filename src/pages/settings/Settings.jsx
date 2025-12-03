@@ -1,13 +1,93 @@
-import React, { useState } from "react";
-import { UserProfile, useUser } from "@clerk/clerk-react"; // Import useUser
-import { Building2, User, Upload } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { UserProfile, useUser, useOrganization } from "@clerk/clerk-react"; 
+import { Building2, User, Upload, Trash2, AlertTriangle } from "lucide-react"; // Added Icons
 
 const Settings = () => {
   const { user } = useUser();
+  const { organization, isLoaded } = useOrganization(); 
   const [activeTab, setActiveTab] = useState("profile");
 
-  // Check role
-  const isAdmin = user?.publicMetadata?.role === "admin";
+  // Form State
+  const [orgName, setOrgName] = useState("");
+  const [logoFile, setLogoFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    if (organization) {
+      setOrgName(organization.name);
+      setPreviewUrl(organization.imageUrl);
+    }
+  }, [organization]);
+
+  // Permission Check
+  const isGlobalAdmin = user?.publicMetadata?.role === "admin";
+  const isOrgAdmin = organization?.membership?.role === "org:admin";
+  const canManageWorkspace = isGlobalAdmin || isOrgAdmin;
+
+  const handleLogoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setLogoFile(file);
+      setPreviewUrl(URL.createObjectURL(file)); 
+    }
+  };
+
+  const handleSave = async () => {
+    if (!organization) return;
+    
+    setIsSaving(true);
+    try {
+      const promises = [];
+      if (orgName && orgName !== organization.name) {
+        promises.push(organization.update({ name: orgName }));
+      }
+      if (logoFile) {
+        promises.push(organization.setLogo({ file: logoFile }));
+      }
+
+      if (promises.length > 0) {
+        await Promise.all(promises);
+        alert("Workspace settings updated successfully!");
+        window.location.reload(); 
+      } else {
+        alert("No changes to save.");
+      }
+    } catch (error) {
+      console.error("Update failed:", error);
+      alert(error.errors?.[0]?.message || "Failed to update settings.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 👇 NEW: Handle Delete Organization
+  const handleDeleteOrganization = async () => {
+    if (!organization) return;
+
+    const confirmMessage = `Are you sure you want to delete "${organization.name}"? This action is permanent and cannot be undone.`;
+    if (!window.confirm(confirmMessage)) return;
+
+    const verification = window.prompt(`Please type "${organization.name}" to confirm deletion:`);
+    if (verification !== organization.name) {
+      alert("Organization name did not match. Deletion cancelled.");
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await organization.destroy();
+      alert("Organization deleted successfully.");
+      window.location.href = "/"; // Redirect to home/personal workspace
+    } catch (error) {
+      console.error("Delete failed:", error);
+      alert(error.errors?.[0]?.message || "Failed to delete organization.");
+      setIsDeleting(false);
+    }
+  };
+
+  if (!isLoaded) return <div className="p-8 text-neutral-400">Loading settings...</div>;
 
   return (
     <div className="space-y-6">
@@ -33,8 +113,7 @@ const Settings = () => {
           My Profile
         </button>
 
-        {/* 👇 Only show Workspace tab if Admin */}
-        {isAdmin && (
+        {canManageWorkspace && (
           <button
             onClick={() => setActiveTab("workspace")}
             className={`flex items-center gap-2 pb-3 border-b-2 transition-colors ${
@@ -70,14 +149,15 @@ const Settings = () => {
                   headerSubtitle: "text-neutral-400",
                   pageScrollBox: "bg-neutral-900",
                   formButtonPrimary: "bg-blue-600 hover:bg-blue-500",
+                  organizationListPreviewItemActionButton: "!hidden",
                 },
               }}
             />
           </div>
         ) : (
-          // Only render Workspace content if Admin (double check)
-          isAdmin && (
+          canManageWorkspace && (
             <div className="max-w-2xl space-y-8">
+              {/* General Info Card */}
               <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 space-y-6">
                 <h2 className="text-lg font-semibold">General Information</h2>
 
@@ -88,9 +168,17 @@ const Settings = () => {
                   </label>
                   <div className="flex items-center gap-6">
                     <div className="w-20 h-20 bg-neutral-950 border border-neutral-800 rounded-lg flex items-center justify-center overflow-hidden">
-                      <span className="text-2xl font-bold text-neutral-600">
-                        N
-                      </span>
+                      {previewUrl ? (
+                        <img 
+                          src={previewUrl} 
+                          alt="Logo Preview" 
+                          className="w-full h-full object-cover" 
+                        />
+                      ) : (
+                        <span className="text-2xl font-bold text-neutral-600">
+                          {orgName?.charAt(0) || "W"}
+                        </span>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <div className="flex gap-3">
@@ -101,11 +189,9 @@ const Settings = () => {
                             type="file"
                             className="hidden"
                             accept="image/*"
+                            onChange={handleLogoChange}
                           />
                         </label>
-                        <button className="text-neutral-400 hover:text-red-400 text-sm font-medium transition-colors px-2">
-                          Remove
-                        </button>
                       </div>
                       <p className="text-xs text-neutral-500">
                         Recommended size: 256x256px. Max file size: 5MB.
@@ -121,14 +207,41 @@ const Settings = () => {
                   </label>
                   <input
                     type="text"
-                    defaultValue="Netflix"
+                    value={orgName}
+                    onChange={(e) => setOrgName(e.target.value)}
                     className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-600 transition-colors"
                   />
                 </div>
 
                 <div className="pt-4 flex justify-end">
-                  <button className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors">
-                    Save Changes
+                  <button 
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSaving ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+              </div>
+
+              {/* 👇 NEW: Danger Zone Card */}
+              <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6 space-y-4">
+                <div className="flex items-center gap-3 text-red-500">
+                  <AlertTriangle size={20} />
+                  <h2 className="text-lg font-semibold">Danger Zone</h2>
+                </div>
+                
+                <p className="text-sm text-neutral-400">
+                  Deleting an organization is permanent and cannot be undone. All projects and data associated with this organization will be lost.
+                </p>
+
+                <div className="flex justify-end pt-2">
+                  <button 
+                    onClick={handleDeleteOrganization}
+                    disabled={isDeleting}
+                    className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isDeleting ? "Deleting..." : <><Trash2 size={16} /> Delete Organization</>}
                   </button>
                 </div>
               </div>
