@@ -21,6 +21,8 @@ function Sidebar() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
 
+  const isAdmin = user?.publicMetadata?.role === "admin";
+
   const fetchSidebarProjects = async () => {
     try {
       const response = await api.get("/projects", {
@@ -141,28 +143,26 @@ function Sidebar() {
             Projects
           </span>
           {/* Clicking Plus takes you to the Projects page where you can create one */}
-          <Plus
-            size={14}
-            className="text-neutral-500 cursor-pointer hover:text-white transition-colors"
-            onClick={() => navigate("/projects")}
-          />
+          {isAdmin && (
+            <Plus
+              size={14}
+              className="text-neutral-500 cursor-pointer hover:text-white transition-colors"
+              onClick={() => navigate("/projects")}
+            />
+          )}
         </div>
 
-        <div className="space-y-1 overflow-y-auto max-h-[200px] scrollbar-hide">
+        <div className="space-y-1 overflow-y-auto max-h-[150px] scrollbar-thin scrollbar-thumb-neutral-700 scrollbar-track-transparent">
           {projects.length > 0 ? (
             projects.map((project) => (
               <div
                 key={project._id || project.id}
-                onClick={() =>
-                  navigate(`/projects/${project._id || project.id}`)
-                }
+                onClick={() => navigate(`/projects/${project._id || project.id}`)}
                 className="flex items-center gap-2 px-2 py-1.5 text-sm text-neutral-400 hover:text-white cursor-pointer rounded hover:bg-neutral-800/50 transition-colors group"
               >
                 <span
                   className={`w-2 h-2 rounded-full shrink-0 ${
-                    project.status === "ACTIVE"
-                      ? "bg-green-500"
-                      : "bg-neutral-600"
+                    project.status === "ACTIVE" ? "bg-green-500" : "bg-neutral-600"
                   }`}
                 ></span>
                 <span className="truncate">{project.title}</span>
@@ -170,7 +170,7 @@ function Sidebar() {
             ))
           ) : (
             <div className="px-2 text-xs text-neutral-600 italic">
-              No projects found
+              {orgId ? "No projects in this Org" : "No personal projects"}
             </div>
           )}
         </div>

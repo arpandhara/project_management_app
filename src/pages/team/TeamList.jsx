@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Search, UserPlus, Users, Activity, Shield, Mail } from "lucide-react";
-import { useOrganization, useUser } from "@clerk/clerk-react"; // 1. Import Hooks
+import { useOrganization, useUser } from "@clerk/clerk-react"; 
+import { useNavigate } from "react-router-dom"; // Import useNavigate
 import InviteMemberModal from "../../components/specific/InviteMemberModal";
 
 const TeamList = () => {
@@ -10,17 +11,27 @@ const TeamList = () => {
       keepPreviousData: true,
     },
   });
-  const { user } = useUser(); // Used to check permissions
+  const { user } = useUser(); 
+  const navigate = useNavigate(); // Initialize navigation hook
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState(""); // Search State
 
-  // Check if current user is admin (to allow inviting)
+  // Check if current user is admin
   const isAdmin = memberships?.data?.find(mem => mem.publicUserData.userId === user?.id)?.role === "org:admin";
 
   useEffect(() => {
     if (isLoaded) setLoading(false);
   }, [isLoaded, memberships]);
+
+  // Filter Logic for Search
+  const filteredMembers = memberships?.data?.filter(mem => {
+    const fullName = `${mem.publicUserData.firstName} ${mem.publicUserData.lastName}`.toLowerCase();
+    const email = mem.publicUserData.identifier.toLowerCase();
+    const search = searchTerm.toLowerCase();
+    return fullName.includes(search) || email.includes(search);
+  });
 
   if (loading) return <div className="p-8 text-neutral-400">Loading team...</div>;
 
@@ -42,7 +53,6 @@ const TeamList = () => {
           <p className="text-neutral-400 mt-1">Manage members of <span className="text-blue-400">{organization.name}</span></p>
         </div>
         
-        {/* Only show Invite button if Admin */}
         {isAdmin && (
           <button 
             onClick={() => setIsModalOpen(true)}
@@ -65,6 +75,8 @@ const TeamList = () => {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
         <input
           type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)} // Bind input to state
           placeholder="Search team members..."
           className="w-full bg-neutral-900 border border-neutral-800 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-blue-600 text-white placeholder-neutral-500"
         />
@@ -72,19 +84,20 @@ const TeamList = () => {
 
       {/* Team Table */}
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
-        {/* Table Header */}
         <div className="grid grid-cols-12 gap-4 p-4 border-b border-neutral-800 text-xs font-bold text-neutral-500 uppercase tracking-wider">
           <div className="col-span-4">Name</div>
           <div className="col-span-5">Email</div>
           <div className="col-span-3 text-right">Role</div>
         </div>
 
-        {/* Table Body - Dynamic Mapping */}
+        {/* Table Body - Using filteredMembers */}
         <div>
-          {memberships?.data?.map((mem) => (
+          {filteredMembers?.map((mem) => (
             <div 
-              key={mem.id} 
-              className="grid grid-cols-12 gap-4 p-4 border-b border-neutral-800/50 hover:bg-neutral-800/50 transition-colors items-center text-sm last:border-0"
+              key={mem.id}
+              // 👇 This navigates to the Member Details page when clicked
+              onClick={() => navigate(`/team/${mem.publicUserData.userId}`)} 
+              className="grid grid-cols-12 gap-4 p-4 border-b border-neutral-800/50 hover:bg-neutral-800/50 transition-colors items-center text-sm last:border-0 cursor-pointer"
             >
               <div className="col-span-4 flex items-center gap-3">
                 <img 
@@ -111,6 +124,10 @@ const TeamList = () => {
               </div>
             </div>
           ))}
+          {/* Show message if search yields no results */}
+          {filteredMembers?.length === 0 && (
+             <div className="p-4 text-center text-neutral-500 text-sm">No members found.</div>
+          )}
         </div>
       </div>
 
@@ -119,7 +136,7 @@ const TeamList = () => {
   );
 };
 
-// Reusable Stat Card (No changes needed)
+// Reusable Stat Card
 const TeamStat = ({ label, value, icon: Icon, color, bg }) => (
   <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-xl flex justify-between items-center">
     <div>

@@ -1,17 +1,18 @@
-import React, { useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth, ClerkLoaded, ClerkLoading } from "@clerk/clerk-react";
 
 // Components
-import AuthLayout from './components/layout/AuthLayout'; // Import the new wrapper
-import Dashboard from './pages/dashboard/Dashboard';
-import ProjectList from './pages/projects/ProjectList';
-import ProjectDetails from './pages/projects/ProjectDetails';
-import TeamList from './pages/team/TeamList'; 
-import Settings from './pages/settings/Settings';
-import LoginPage from './pages/auth/LoginPage';
-import SignUpPage from './pages/auth/SignUpPage';
-import Invitations from './pages/team/Invitations';
+import AuthLayout from "./components/layout/AuthLayout"; // Import the new wrapper
+import Dashboard from "./pages/dashboard/Dashboard";
+import ProjectList from "./pages/projects/ProjectList";
+import ProjectDetails from "./pages/projects/ProjectDetails";
+import TeamList from "./pages/team/TeamList";
+import Settings from "./pages/settings/Settings";
+import LoginPage from "./pages/auth/LoginPage";
+import SignUpPage from "./pages/auth/SignUpPage";
+import Invitations from "./pages/team/Invitations";
+import MemberDetails from "./pages/team/MemberDetails";
 // API Helper
 import { setupInterceptors } from "./services/api";
 
@@ -47,6 +48,7 @@ const App = () => {
             <Route path="team" element={<TeamList />} />
             <Route path="settings" element={<Settings />} />
             <Route path="invitations" element={<Invitations />} />
+            <Route path="team/:userId" element={<MemberDetails />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -54,6 +56,6 @@ const App = () => {
       </ClerkLoaded>
     </>
   );
-}
+};
 
 export default App;
