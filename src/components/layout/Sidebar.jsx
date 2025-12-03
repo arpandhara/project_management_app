@@ -1,5 +1,6 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
+import {useClerk} from "@clerk/clerk-react"
 import {
   LayoutDashboard,
   FolderKanban,
@@ -8,8 +9,12 @@ import {
   CheckSquare,
   Plus,
   ChevronDown,
+  LogOut
 } from "lucide-react";
 function Sidebar() {
+
+  const {signOut} = useClerk();
+
   const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/" },
     { icon: FolderKanban, label: "Projects", path: "/projects" },
@@ -70,6 +75,16 @@ function Sidebar() {
           </div>
         </div>
       </nav>
+
+      <div className="px-4 pb-2">
+         <button 
+            onClick={() => signOut()}
+            className="w-full flex items-centergap-3 px-3 py-2 rounded-md text-sm text-red-400 hover:bg-neutral-800/50 hover:text-red-300 transition-colors cursor-pointer"
+         >
+            <LogOut size={18} className="mr-3" />
+            Logout
+         </button>
+      </div>
 
       <div className="px-4 py-6 border-t border-neutral-800">
         <div className="flex items-center justify-between mb-3 px-2">

@@ -13,9 +13,14 @@ const ProjectList = () => {
   useEffect(() => {
     const fetchProjects = async () => {
       try {
+        const response = await api.get("/projects");
         // This call now automatically has the Clerk Token attached!
-        const response = await api.get("/projects"); 
-        setProjects(response.data);
+        if (Array.isArray(response.data)) {
+            setProjects(response.data);
+        } else {
+            console.error("API returned non-array data:", response.data);
+            setProjects([]); 
+        }
       } catch (error) {
         console.error("Failed to fetch projects", error);
       } finally {
