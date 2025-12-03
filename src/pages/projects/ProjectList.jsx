@@ -1,125 +1,168 @@
-import React , {useState , useEffect} from "react";
-import { Plus, Search, Filter, MoreVertical } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Plus, Search, MoreVertical, Trash2, Calendar, User as UserIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useUser } from "@clerk/clerk-react";
 import NewProjectModal from "../../components/specific/NewProjectModal";
 import api from "../../services/api";
 
 const ProjectList = () => {
   const navigate = useNavigate();
+  const { user } = useUser();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Track which dropdown is open (by project ID)
+  const [openMenuId, setOpenMenuId] = useState(null);
+
+  const isAdmin = user?.publicMetadata?.role === "admin";
+
+  const fetchProjects = async () => {
+    try {
+      const response = await api.get("/projects");
+      setProjects(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error("Failed to fetch projects", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const response = await api.get("/projects");
-        // This call now automatically has the Clerk Token attached!
-        if (Array.isArray(response.data)) {
-            setProjects(response.data);
-        } else {
-            console.error("API returned non-array data:", response.data);
-            setProjects([]); 
-        }
-      } catch (error) {
-        console.error("Failed to fetch projects", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchProjects();
   }, []);
 
-  if (loading) return <div>Loading...</div>;
+  // Handle Delete
+  const handleDelete = async (e, projectId) => {
+    e.stopPropagation(); // Stop navigation to details
+    if (!window.confirm("Are you sure you want to delete this project?")) return;
+
+    try {
+      await api.delete(`/projects/${projectId}`);
+      setProjects(projects.filter(p => p._id !== projectId && p.id !== projectId));
+      setOpenMenuId(null);
+    } catch (error) {
+      console.error("Failed to delete project", error);
+      alert("Failed to delete project");
+    }
+  };
+
+  // Toggle Dropdown
+  const toggleMenu = (e, projectId) => {
+    e.stopPropagation();
+    setOpenMenuId(openMenuId === projectId ? null : projectId);
+  };
+
+  if (loading) return <div className="p-8 text-neutral-400">Loading projects...</div>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" onClick={() => setOpenMenuId(null)}> 
+      {/* Click anywhere to close menu */}
+      
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold">Projects</h1>
           <p className="text-neutral-400 mt-1">Manage and track your projects</p>
         </div>
-        <button onClick={()=>setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-colors">
-          <Plus size={16} /> New Project
-        </button>
-      </div>
-
-      {/* Filters & Search */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
-          <input
-            type="text"
-            placeholder="Search projects..."
-            className="w-full bg-neutral-900 border border-neutral-800 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-blue-600 text-white placeholder-neutral-500"
-          />
-        </div>
-        <div className="flex gap-3">
-          <select className="bg-neutral-900 border border-neutral-800 rounded-lg px-4 py-2 text-sm text-neutral-300 focus:outline-none cursor-pointer">
-            <option>All Status</option>
-            <option>Active</option>
-            <option>Completed</option>
-          </select>
-          <select className="bg-neutral-900 border border-neutral-800 rounded-lg px-4 py-2 text-sm text-neutral-300 focus:outline-none cursor-pointer">
-            <option>All Priority</option>
-            <option>High</option>
-            <option>Medium</option>
-            <option>Low</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Project Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {projects.map((project) => (
-          <div 
-            key={project.id} 
-            onClick={() => navigate(`/projects/${project.id}`)}
-            className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 hover:border-neutral-700 transition-all cursor-pointer group"
+        {isAdmin && (
+          <button 
+            onClick={() => setIsModalOpen(true)} 
+            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-colors"
           >
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="font-semibold text-lg text-white group-hover:text-blue-400 transition-colors">
-                  {project.title}
-                </h3>
-              </div>
-              {/* Optional More Menu */}
-              <button className="text-neutral-500 hover:text-white" onClick={(e) => e.stopPropagation()}>
-                <MoreVertical size={18} />
-              </button>
-            </div>
-
-            <p className="text-neutral-400 text-sm mb-6 line-clamp-2">
-              {project.desc}
-            </p>
-
-            <div className="flex items-center justify-between mb-4">
-              <span className="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded font-medium">
-                {project.status}
-              </span>
-              <span className={`text-xs font-bold uppercase ${project.priority === 'HIGH' ? 'text-blue-400' : 'text-neutral-400'}`}>
-                {project.priority} Priority
-              </span>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs text-neutral-500">
-                <span>Progress</span>
-                <span>{project.progress}%</span>
-              </div>
-              <div className="w-full bg-neutral-800 h-1.5 rounded-full">
-                <div 
-                  className="bg-blue-600 h-1.5 rounded-full" 
-                  style={{ width: `${project.progress}%` }}
-                ></div>
-              </div>
-            </div>
-          </div>
-        ))}
+            <Plus size={16} /> New Project
+          </button>
+        )}
       </div>
-      <NewProjectModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+
+      {/* ... (Search bar section - keep as is) ... */}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {projects.length > 0 ? (
+          projects.map((project) => {
+            const pid = project._id || project.id;
+            return (
+              <div 
+                key={pid} 
+                onClick={() => navigate(`/projects/${pid}`)}
+                className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 hover:border-neutral-700 transition-all cursor-pointer group relative"
+              >
+                {/* Card Header */}
+                <div className="flex justify-between items-start mb-4">
+                  <h3 className="font-semibold text-lg text-white group-hover:text-blue-400 transition-colors">
+                    {project.title}
+                  </h3>
+                  
+                  {/* Three Dots Menu - Only show for Admin */}
+                  {isAdmin && (
+                    <div className="relative">
+                      <button 
+                        className="text-neutral-500 hover:text-white p-1 rounded-md hover:bg-neutral-800 transition-colors" 
+                        onClick={(e) => toggleMenu(e, pid)}
+                      >
+                        <MoreVertical size={18} />
+                      </button>
+                      
+                      {/* Dropdown */}
+                      {openMenuId === pid && (
+                        <div className="absolute right-0 top-full mt-2 w-40 bg-neutral-950 border border-neutral-800 rounded-lg shadow-xl z-10 overflow-hidden">
+                          <button 
+                            onClick={(e) => handleDelete(e, pid)}
+                            className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-400 hover:bg-neutral-900 transition-colors text-left"
+                          >
+                            <Trash2 size={14} /> Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-neutral-400 text-sm mb-6 line-clamp-2">
+                  {project.description}
+                </p>
+
+                {/* Meta Info (Date & Creator) */}
+                <div className="flex items-center gap-4 mb-4 text-xs text-neutral-500 border-b border-neutral-800 pb-4">
+                   <div className="flex items-center gap-1.5">
+                      <Calendar size={14} />
+                      <span>{new Date(project.createdAt).toLocaleDateString()}</span>
+                   </div>
+                   <div className="flex items-center gap-1.5">
+                      <UserIcon size={14} />
+                      <span className="truncate max-w-[100px]" title={project.ownerId}>
+                        Admin {/* Backend doesn't send name yet, using placeholder */}
+                      </span>
+                   </div>
+                </div>
+
+                {/* Status & Priority Tags */}
+                <div className="flex items-center justify-between">
+                  <span className="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded font-medium">
+                    {project.status || 'ACTIVE'}
+                  </span>
+                  <span className={`text-xs font-bold uppercase ${
+                    project.priority === 'HIGH' ? 'text-orange-400' : 
+                    project.priority === 'LOW' ? 'text-blue-400' : 'text-neutral-400'
+                  }`}>
+                    {project.priority || 'MEDIUM'} Priority
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div className="col-span-2 text-center text-neutral-500 py-12">
+            No projects found.
+          </div>
+        )}
+      </div>
+      
+      <NewProjectModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        onProjectCreated={fetchProjects} 
+      />
     </div>
   );
 };

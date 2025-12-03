@@ -1,5 +1,5 @@
-import React from "react";
-import { NavLink } from "react-router-dom";
+import React , {useState , useEffect} from "react";
+import { NavLink , useNavigate} from "react-router-dom";
 import {useClerk} from "@clerk/clerk-react"
 import {
   LayoutDashboard,
@@ -11,9 +11,28 @@ import {
   ChevronDown,
   LogOut
 } from "lucide-react";
+import api from "../../services/api";
+
 function Sidebar() {
 
   const {signOut} = useClerk();
+  const navigate = useNavigate();
+  const [projects, setProjects] = useState([]);
+
+  useEffect(() => {
+    const fetchSidebarProjects = async () => {
+      try {
+        const response = await api.get("/projects");
+        if (Array.isArray(response.data)) {
+          setProjects(response.data);
+        }
+      } catch (error) {
+        console.error("Sidebar project fetch error:", error);
+      }
+    };
+
+    fetchSidebarProjects();
+  }, []);
 
   const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/" },
@@ -91,15 +110,31 @@ function Sidebar() {
           <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
             Projects
           </span>
-          <Plus size={14} className="text-neutral-500 cursor-pointer hover:text-white" />
+          {/* Clicking Plus takes you to the Projects page where you can create one */}
+          <Plus 
+            size={14} 
+            className="text-neutral-500 cursor-pointer hover:text-white transition-colors" 
+            onClick={() => navigate('/projects')}
+          />
         </div>
-        <div className="space-y-1">
-          {["Kubernetes Migration", "Auto Regression Suite"].map((project, i) => (
-            <div key={i} className="flex items-center gap-2 px-2 py-1.5 text-sm text-neutral-400 hover:text-white cursor-pointer rounded hover:bg-neutral-800/50">
-              <span className={`w-2 h-2 rounded-full ${i === 0 ? 'bg-blue-500' : 'bg-orange-500'}`}></span>
-              <span className="truncate">{project}</span>
-            </div>
-          ))}
+        
+        <div className="space-y-1 overflow-y-auto max-h-[200px] scrollbar-hide">
+          {projects.length > 0 ? (
+            projects.map((project) => (
+              <div 
+                key={project._id || project.id} 
+                onClick={() => navigate(`/projects/${project._id || project.id}`)}
+                className="flex items-center gap-2 px-2 py-1.5 text-sm text-neutral-400 hover:text-white cursor-pointer rounded hover:bg-neutral-800/50 transition-colors group"
+              >
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                  project.status === 'ACTIVE' ? 'bg-green-500' : 'bg-neutral-600'
+                }`}></span>
+                <span className="truncate">{project.title}</span>
+              </div>
+            ))
+          ) : (
+            <div className="px-2 text-xs text-neutral-600 italic">No projects found</div>
+          )}
         </div>
       </div>
     </aside>
