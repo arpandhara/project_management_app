@@ -14,7 +14,6 @@ const MemberDetails = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
 
-  // 👇 FIX: Configure hook to actually fetch memberships
   const { organization, memberships, isLoaded } = useOrganization({
     memberships: {
       pageSize: 50,
@@ -28,37 +27,29 @@ const MemberDetails = () => {
   const [tasks, setTasks] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
 
-  // Find the specific member from Clerk list
   const member = memberships?.data?.find(
     (m) => m.publicUserData.userId === userId
   );
   const isMe = userId === currentUser?.id;
 
-  // Check if *I* am an admin
   const iAmAdmin = 
-    // Check Organization Role
     memberships?.data?.find((m) => m.publicUserData.userId === currentUser?.id)?.role === "org:admin" || 
-    // Check Global/Database Role (saved in Clerk publicMetadata)
     currentUser?.publicMetadata?.role === "admin";
   const targetIsAdmin = member?.role === "org:admin";
 
   useEffect(() => {
     const fetchData = async () => {
-      // Only fetch if we have valid data
       if (!userId || !organization || !member) return;
 
       try {
-        // Fetch Projects this user is in
         const resProjects = await api.get("/projects", {
           params: { orgId: organization.id, userId },
         });
         setProjects(resProjects.data);
 
-        // Fetch Tasks assigned to this user
         const resTasks = await api.get(`/tasks/user/${userId}`);
         setTasks(resTasks.data);
 
-        // Fetch pending admin requests (only if I am admin)
         if (iAmAdmin) {
           const resRequests = await api.get("/admin-actions/pending", {
             params: { orgId: organization.id },
@@ -75,7 +66,6 @@ const MemberDetails = () => {
     }
   }, [userId, organization, iAmAdmin, isLoaded, member]);
 
-  // Actions
   const handleKick = async () => {
     if (!window.confirm("Remove this user from organization?")) return;
     try {
@@ -110,7 +100,6 @@ const MemberDetails = () => {
     }
   };
 
-  // 👇 FIX: Better Loading State Handling
   if (!isLoaded)
     return <div className="p-8 text-neutral-400">Loading member data...</div>;
   if (!member)
@@ -122,7 +111,6 @@ const MemberDetails = () => {
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
-      {/* Profile Header */}
       <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-xl flex items-center justify-between">
         <div className="flex items-center gap-4">
           <img
@@ -151,6 +139,7 @@ const MemberDetails = () => {
 
         {iAmAdmin && !isMe && (
           <div className="flex flex-col gap-2">
+            {/* 1. Role Management Button (Demote vs Promote) */}
             {targetIsAdmin ? (
               <button
                 onClick={handleDemoteRequest}
@@ -159,40 +148,38 @@ const MemberDetails = () => {
                 Request Demotion
               </button>
             ) : (
-              <>
-                {/* 👇 NEW: Promote Button */}
-                <button
-                  onClick={async () => {
-                    if (!window.confirm("Promote this user to Admin?")) return;
-                    try {
-                      await api.post("/admin-actions/promote", {
-                        targetUserId: userId,
-                        orgId: organization.id,
-                      });
-                      alert("User promoted!");
-                      window.location.reload();
-                    } catch (e) {
-                      alert("Failed to promote");
-                    }
-                  }}
-                  className="bg-green-600/10 text-green-500 hover:bg-green-600/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                >
-                  <Shield size={16} /> Promote to Admin
-                </button>
-
-                <button
-                  onClick={handleKick}
-                  className="bg-red-600/10 text-red-500 hover:bg-red-600/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                >
-                  <Trash2 size={16} /> Remove from Org
-                </button>
-              </>
+              <button
+                onClick={async () => {
+                  if (!window.confirm("Promote this user to Admin?")) return;
+                  try {
+                    await api.post("/admin-actions/promote", {
+                      targetUserId: userId,
+                      orgId: organization.id,
+                    });
+                    alert("User promoted!");
+                    window.location.reload();
+                  } catch (e) {
+                    alert("Failed to promote");
+                  }
+                }}
+                className="bg-green-600/10 text-green-500 hover:bg-green-600/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <Shield size={16} /> Promote to Admin
+              </button>
             )}
+
+            {/* 2. Kick Button - Now Visible for EVERYONE (Admins and Members) */}
+            <button
+              onClick={handleKick}
+              className="bg-red-600/10 text-red-500 hover:bg-red-600/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              <Trash2 size={16} /> Remove from Org
+            </button>
           </div>
         )}
       </div>
 
-      {/* ⚠️ Pending Requests Alert (For Admins) */}
+      {/* ... (Keep Pending Requests Alert and Projects/Tasks Grid exactly as is) ... */}
       {iAmAdmin && pendingRequests.some((r) => r.targetUserId === userId) && (
         <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -206,7 +193,6 @@ const MemberDetails = () => {
               </p>
             </div>
           </div>
-          {/* Only show Approve if I am NOT the requester */}
           {pendingRequests.find((r) => r.targetUserId === userId)
             .requesterUserId !== currentUser.id && (
             <button
@@ -223,9 +209,7 @@ const MemberDetails = () => {
         </div>
       )}
 
-      {/* Projects & Tasks Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Projects */}
         <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
           <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
             <Briefcase size={18} /> Involved Projects
@@ -247,7 +231,6 @@ const MemberDetails = () => {
           )}
         </div>
 
-        {/* Tasks */}
         <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
           <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
             <CheckSquare size={18} /> Assigned Tasks
