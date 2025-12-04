@@ -1,30 +1,57 @@
 import React, { useEffect, useState } from "react";
 import { useAuth, useUser } from "@clerk/clerk-react";
-import { Check, X, AlertTriangle, UserMinus, Trash2 } from "lucide-react";
+import { Check, X, UserMinus, Trash2, Bell, Info } from "lucide-react"; 
 import api from "../../services/api";
 
 const Notifications = () => {
-  const { orgId } = useAuth();
+  const { orgId, orgRole } = useAuth(); // 1. Get orgRole
   const { user } = useUser();
-  const [requests, setRequests] = useState([]);
+  
+  // State for Admin Requests
+  const [adminRequests, setAdminRequests] = useState([]);
+  // State for User Notifications
+  const [userNotifications, setUserNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchRequests = async () => {
-    try {
-      const res = await api.get("/admin-actions/pending", {
-        params: { orgId }
-      });
-      setRequests(res.data);
-    } catch (error) {
-      console.error("Failed to fetch notifications", error);
-    } finally {
-      setLoading(false);
+  // Fetch Data
+  const fetchData = async () => {
+    setLoading(true);
+
+    // 2. Fetch Admin Actions (Only if User is Org Admin)
+    if (orgRole === "org:admin") {
+      try {
+        const adminRes = await api.get("/admin-actions/pending", { params: { orgId } });
+        setAdminRequests(adminRes.data || []);
+      } catch (error) {
+        console.error("Failed to fetch admin notifications", error);
+      }
     }
+
+    // 3. Fetch User Notifications (For Everyone)
+    try {
+      const userRes = await api.get("/notifications");
+      setUserNotifications(userRes.data || []);
+    } catch (error) {
+      console.error("Failed to fetch user notifications", error);
+    }
+    
+    setLoading(false);
   };
 
-  useEffect(() => {
-    if (orgId) fetchRequests();
-  }, [orgId]);
+ useEffect(() => {
+    const init = async () => {
+      if (orgId) await fetchData(); 
+      
+      // 👇 NEW: Mark notifications as read and refresh badge immediately
+      try {
+        await api.put("/notifications/mark-read");
+        window.dispatchEvent(new Event("notificationUpdate"));
+      } catch (err) {
+        console.error("Failed to mark notifications as read", err);
+      }
+    };
+    init();
+  }, [orgId, orgRole]); // Re-run if role changes
 
   const handleApprove = async (req) => {
     const actionName = req.type === "DELETE_ORG" ? "delete this organization" : "approve this action";
@@ -41,7 +68,7 @@ const Notifications = () => {
       if (req.type === "DELETE_ORG") {
         window.location.href = "/"; 
       } else {
-        fetchRequests(); 
+        fetchData(); 
       }
     } catch (error) {
       alert(error.response?.data?.message || "Failed to approve.");
@@ -53,73 +80,89 @@ const Notifications = () => {
     try {
       await api.post(`/admin-actions/reject/${req._id}`);
       alert("Request denied and removed.");
-      fetchRequests(); 
+      fetchData(); 
     } catch (error) {
       alert(error.response?.data?.message || "Failed to deny.");
+    }
+  };
+
+  // Handle Dismissing User Notification
+  const handleDismiss = async (noteId) => {
+    try {
+      await api.delete(`/notifications/${noteId}`);
+      setUserNotifications((prev) => prev.filter(n => n._id !== noteId));
+    } catch (error) {
+      console.error("Failed to dismiss", error);
     }
   };
 
   if (loading) return <div className="p-8 text-neutral-400">Loading notifications...</div>;
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
+    <div className="space-y-8 max-w-3xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold">Admin Notifications</h1>
-        <p className="text-neutral-400 mt-1">Pending approvals for sensitive actions.</p>
+        <h1 className="text-2xl font-bold">Notifications</h1>
+        <p className="text-neutral-400 mt-1">Updates and pending actions.</p>
       </div>
 
-      {requests.length === 0 ? (
-        <div className="p-8 text-center bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-500">
-          No pending notifications.
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {requests.map((req) => (
-            <div key={req._id} className="bg-neutral-900 border border-neutral-800 p-5 rounded-xl flex items-center justify-between">
+      {/* User Notifications Section */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <Bell size={18} /> Inbox
+        </h2>
+        {userNotifications.length === 0 ? (
+          <p className="text-neutral-500 text-sm italic">No new messages.</p>
+        ) : (
+          userNotifications.map((note) => (
+            <div key={note._id} className="bg-neutral-900 border border-neutral-800 p-4 rounded-xl flex items-center justify-between">
               <div className="flex items-center gap-4">
-                {/* Icon based on Type */}
-                <div className={`p-3 rounded-lg ${req.type === 'DELETE_ORG' ? 'bg-red-500/10 text-red-500' : 'bg-orange-500/10 text-orange-500'}`}>
-                  {req.type === 'DELETE_ORG' ? <Trash2 size={20} /> : <UserMinus size={20} />}
+                <div className="bg-blue-500/10 p-2 rounded-lg text-blue-500">
+                  <Info size={20} />
                 </div>
-                
-                <div>
-                  <h3 className="font-semibold text-white">
-                    {req.type === 'DELETE_ORG' ? "Organization Deletion Request" : "Admin Demotion Request"}
-                  </h3>
-                  
-                  {/* 👇 UPDATED: Show Real Names */}
-                  <p className="text-sm text-neutral-400 mt-1">
-                    Requested by <span className="text-white font-medium">
-                      {req.requesterUserId === user.id ? "You" : req.requesterName}
-                    </span>
-                    {req.targetName && (
-                      <span> • Target: <span className="text-white font-medium">{req.targetName}</span></span>
-                    )}
-                  </p>
-                </div>
+                <p className="text-white text-sm">{note.message}</p>
               </div>
+              <button
+                onClick={() => handleDismiss(note._id)}
+                className="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                OK
+              </button>
+            </div>
+          ))
+        )}
+      </div>
 
-              {/* Action Buttons */}
-              {req.requesterUserId !== user.id ? (
+      {/* Admin Requests Section (Only render if requests exist) */}
+      {adminRequests.length > 0 && (
+        <div className="space-y-4 pt-6 border-t border-neutral-800">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+             <UserMinus size={18} /> Admin Approvals
+          </h2>
+          {adminRequests.map((req) => (
+            <div key={req._id} className="bg-neutral-900 border border-neutral-800 p-5 rounded-xl flex items-center justify-between">
+               <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-lg ${req.type === 'DELETE_ORG' ? 'bg-red-500/10 text-red-500' : 'bg-orange-500/10 text-orange-500'}`}>
+                    {req.type === 'DELETE_ORG' ? <Trash2 size={20} /> : <UserMinus size={20} />}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white">
+                      {req.type === 'DELETE_ORG' ? "Organization Deletion Request" : "Admin Demotion Request"}
+                    </h3>
+                    <p className="text-sm text-neutral-400 mt-1">
+                      Requested by <span className="text-white font-medium">{req.requesterName || "Admin"}</span>
+                    </p>
+                  </div>
+               </div>
+               
+               {/* Action Buttons */}
+               {req.requesterUserId !== user.id ? (
                 <div className="flex gap-3">
-                  <button
-                    onClick={() => handleApprove(req)}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    <Check size={16} /> Approve
-                  </button>
-                  <button
-                    onClick={() => handleDeny(req)}
-                    className="flex items-center gap-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 border border-red-600/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    <X size={16} /> Deny
-                  </button>
+                  <button onClick={() => handleApprove(req)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"><Check size={16}/> Approve</button>
+                  <button onClick={() => handleDeny(req)} className="flex items-center gap-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 border border-red-600/20 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"><X size={16}/> Deny</button>
                 </div>
-              ) : (
-                <span className="text-xs bg-neutral-800 text-neutral-500 px-3 py-1 rounded-full border border-neutral-700">
-                  Waiting for approval
-                </span>
-              )}
+               ) : (
+                 <span className="text-xs text-neutral-500 bg-neutral-800 px-2 py-1 rounded">Pending</span>
+               )}
             </div>
           ))}
         </div>

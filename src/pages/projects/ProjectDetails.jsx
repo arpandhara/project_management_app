@@ -5,7 +5,7 @@ import {
   BarChart2, Settings, User, Zap, CheckCircle2, Clock, 
   Users, UserPlus
 } from "lucide-react";
-import { useUser, useAuth } from "@clerk/clerk-react"; // Import useAuth
+import { useUser, useAuth } from "@clerk/clerk-react"; 
 import NewTaskModal from "../../components/specific/NewTaskModal";
 import api from "../../services/api";
 
@@ -13,7 +13,7 @@ const ProjectDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useUser();
-  const { orgRole } = useAuth(); // Get Org Role
+  const { orgRole } = useAuth(); 
   
   // State
   const [project, setProject] = useState(null);
@@ -23,7 +23,6 @@ const ProjectDetails = () => {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [newMemberEmail, setNewMemberEmail] = useState("");
 
-  // 👇 PERMISSION CHECK: Admin if Personal Admin OR Org Admin
   const isAdmin = user?.publicMetadata?.role === "admin" || orgRole === "org:admin";
 
   const fetchData = async () => {
@@ -48,12 +47,22 @@ const ProjectDetails = () => {
   const handleAddMember = async (e) => {
     e.preventDefault();
     if (!newMemberEmail) return;
+    
     try {
-      await api.put(`/projects/${id}/members`, { email: newMemberEmail });
-      alert("Member added successfully!");
+      // 1. Send Request
+      const res = await api.put(`/projects/${id}/members`, { email: newMemberEmail });
+      
+      // 2. Update UI Immediately using the response data
+      // (We append the new member to the existing list)
+      if (res.data.member) {
+        setMembers((prev) => [...prev, res.data.member]);
+      }
+
       setNewMemberEmail("");
-      const memRes = await api.get(`/projects/${id}/members`);
-      setMembers(memRes.data);
+      
+      // 3. Show Success Message
+      alert("Member added successfully!");
+      
     } catch (error) {
       alert(error.response?.data?.message || "Failed to add member");
     }
@@ -84,7 +93,6 @@ const ProjectDetails = () => {
           </div>
         </div>
         
-        {/* 👇 HIDE BUTTON IF NOT ADMIN */}
         {isAdmin && (
           <button 
             onClick={() => setIsTaskModalOpen(true)} 
