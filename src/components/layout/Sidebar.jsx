@@ -10,7 +10,7 @@ import {
   Plus,
   LogOut,
   Mail,
-  Building ,
+  Building, 
   Bell
 } from "lucide-react";
 import api from "../../services/api";
@@ -18,41 +18,60 @@ import api from "../../services/api";
 function Sidebar() {
   const { user } = useUser();
   const { signOut } = useClerk();
-  const { orgId, orgRole } = useAuth(); // Get Org Role from auth hook
+  const { orgId, orgRole } = useAuth(); 
   const navigate = useNavigate();
+  
   const [projects, setProjects] = useState([]);
+  const [pendingCount, setPendingCount] = useState(0); // 👇 NEW: State for badge
 
   // Permission Logic
   const isGlobalAdmin = user?.publicMetadata?.role === "admin";
   const isOrgAdmin = orgRole === "org:admin";
-  // Show "Create Org" button if Global Admin OR Org Admin
   const canCreateOrg = isGlobalAdmin || isOrgAdmin;
 
+  // Fetch Projects
   const fetchSidebarProjects = async () => {
-    // Only fetch projects if in an Organization
     if (!orgId) return; 
-
     try {
-      const response = await api.get("/projects", {
-        params: { orgId: orgId } 
-      });
-      if (Array.isArray(response.data)) {
-        setProjects(response.data);
-      } else {
-        setProjects([]);
-      }
+      const response = await api.get("/projects", { params: { orgId } });
+      setProjects(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error("Sidebar project fetch error:", error);
     }
   };
 
+  // 👇 NEW: Fetch Notification Count
+  const fetchPendingRequests = async () => {
+    // Only fetch if User is Admin and in an Org (otherwise API will return 403)
+    if (!orgId || !canCreateOrg) {
+      setPendingCount(0);
+      return;
+    }
+
+    try {
+      const response = await api.get("/admin-actions/pending", { 
+        params: { orgId } 
+      });
+      // Set count based on array length
+      setPendingCount(Array.isArray(response.data) ? response.data.length : 0);
+    } catch (error) {
+      console.error("Notification fetch error:", error);
+    }
+  };
+
   useEffect(() => {
     fetchSidebarProjects();
+    fetchPendingRequests(); // 👇 Initial fetch
+
     window.addEventListener("projectUpdate", fetchSidebarProjects);
+    // Optional: Add a listener if you want notifications to update instantly without reload
+    window.addEventListener("notificationUpdate", fetchPendingRequests);
+
     return () => {
       window.removeEventListener("projectUpdate", fetchSidebarProjects);
+      // window.removeEventListener("notificationUpdate", fetchPendingRequests);
     };
-  }, [orgId]);
+  }, [orgId, canCreateOrg]); // Re-run if Org or Permissions change
 
   const inviteCount = user?.emailAddresses?.reduce((acc, email) => {
     return acc + (email.invitations?.length || 0);
@@ -60,23 +79,20 @@ function Sidebar() {
 
   // Navigation Logic
   const navItems = [
-    // Show Dashboard/Projects/Team only if in an Organization
     ...(orgId ? [
       { icon: LayoutDashboard, label: "Dashboard", path: "/" },
       { icon: FolderKanban, label: "Projects", path: "/projects" },
       { icon: Users, label: "Team", path: "/team" }
     ] : []),
     
-    // Always show Invitations and Settings
     { icon: Mail, label: "Invitations", path: "/invitations", badge: inviteCount },
+    
+    // 👇 UPDATED: Add badge for Notifications
+    ...(orgId ? [{ icon: Bell, label: "Notifications", path: "/notifications", badge: pendingCount }] : []),
 
-    // Conditionally show "Create Org" button
     ...(canCreateOrg ? [{ icon: Building, label: "Create Org", path: "/create-organization" }] : []),
-
-    ...(orgId ? [{ icon: Bell, label: "Notifications", path: "/notifications" }] : []),
-
+    
     { icon: Settings, label: "Settings", path: "/settings" },
-
   ];
 
   return (
@@ -94,11 +110,6 @@ function Sidebar() {
               organizationSwitcherTriggerIcon: "text-neutral-400",
               organizationSwitcherPopoverCard: "bg-neutral-900 border border-neutral-800",
               
-              // 👇 REMOVED the !hidden classes.
-              // We rely on index.css to hide the specific "Manage" button if needed.
-              // The "Create Organization" button inside the footer will be hidden via CSS in index.css
-              // to force users to use our custom button instead.
-
               userPreviewTextContainer: "ml-2 text-white",
               userPreviewText: "font-medium text-sm text-white",
               userPreviewSecondaryText: "text-neutral-400",
@@ -117,25 +128,13 @@ function Sidebar() {
       {/* Navigation Section */}
       <nav className="flex-1 px-4 py-6 space-y-1">
         {navItems.map((items) => (
-          <NavLink
+          <SidebarItem 
             key={items.path}
             to={items.path}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
-                isActive
-                  ? "bg-neutral-800 text-white font-medium"
-                  : "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200"
-              }`
-            }
-          >
-            <items.icon size={18} />
-            {items.label}
-            {items.badge > 0 && (
-              <span className="ml-auto bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                {items.badge}
-              </span>
-            )}
-          </NavLink>
+            icon={items.icon}
+            label={items.label}
+            badge={items.badge}
+          />
         ))}
 
         {/* My Task Section - Only show if in Org */}
@@ -171,8 +170,7 @@ function Sidebar() {
             <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
               Projects
             </span>
-            {/* Show Plus button if Global Admin (user metadata) OR Org Admin (current org role) */}
-            {(isGlobalAdmin || isOrgAdmin) && (
+            {canCreateOrg && (
               <Plus
                 size={14}
                 className="text-neutral-500 cursor-pointer hover:text-white transition-colors"

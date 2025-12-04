@@ -25,7 +25,7 @@ const Settings = () => {
   // Permission Check
   const isGlobalAdmin = user?.publicMetadata?.role === "admin";
   const isOrgAdmin = organization?.membership?.role === "org:admin";
-  const canManageWorkspace = isGlobalAdmin || isOrgAdmin;
+  const canManageWorkspace = organization && (isGlobalAdmin || isOrgAdmin);
 
   const handleLogoChange = (e) => {
     const file = e.target.files[0];
@@ -84,7 +84,9 @@ const Settings = () => {
         pageSize: 5, // We just need to know if it's > 1
       });
 
-      const adminCount = adminMemberships.totalCount;
+      const adminCount = adminMemberships.total_count;
+
+      console.log("DEBUG: Admin Count:", adminCount);
 
       // 2. Decision Logic
       if (adminCount > 1) {
