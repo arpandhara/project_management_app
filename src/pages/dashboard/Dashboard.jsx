@@ -1,43 +1,80 @@
 import React, { useState, useEffect } from "react";
 import { Folder, CheckCircle, Clock, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import api from "../../services/api"; // Import API helper
-import { useAuth } from "@clerk/clerk-react";
+import api from "../../services/api";
+import { useAuth, useUser } from "@clerk/clerk-react"; // Import useUser
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { user } = useUser();
   const { orgId } = useAuth();
 
-  // Fetch Projects on Mount
+  const [projects, setProjects] = useState([]);
+  const [myTasks, setMyTasks] = useState([]); // 👇 NEW: State for tasks
+  const [loading, setLoading] = useState(true);
+
+  // 1. Fetch Projects (Existing)
+  const fetchProjects = async () => {
+    try {
+      const response = await api.get("/projects", {
+        params: { orgId: orgId || "" },
+      });
+      setProjects(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error("Failed to load projects", error);
+    }
+  };
+
+  // 2. 👇 NEW: Fetch My Tasks
+  const fetchMyTasks = async () => {
+    if (!user?.id) return;
+    try {
+      const res = await api.get(`/tasks/user/${user.id}`);
+      setMyTasks(Array.isArray(res.data) ? res.data : []);
+    } catch (error) {
+      console.error("Failed to load tasks", error);
+    }
+  };
+
+  // 3. Combined Data Loading & Listeners
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        const response = await api.get("/projects", {
-          params: { orgId: orgId || "" },
-        });
-        if (Array.isArray(response.data)) {
-          setProjects(response.data);
-        }else {
-          setProjects([]);
-        }
-      } catch (error) {
-        console.error("Failed to load dashboard data", error);
-      } finally {
-        setLoading(false);
-      }
+    const initData = async () => {
+      setLoading(true);
+      await Promise.all([fetchProjects(), fetchMyTasks()]);
+      setLoading(false);
     };
 
-    fetchDashboardData();
-  }, [orgId]);
+    if (orgId) initData();
+
+    // Listen for global updates (from NewTaskModal)
+    window.addEventListener("taskUpdate", fetchMyTasks);
+    window.addEventListener("projectUpdate", fetchProjects);
+
+    return () => {
+      window.removeEventListener("taskUpdate", fetchMyTasks);
+      window.removeEventListener("projectUpdate", fetchProjects);
+    };
+  }, [orgId, user?.id]);
+
+  // 4. Calculate Stats
+  const completedProjects = projects.filter(
+    (p) => p.status === "COMPLETED"
+  ).length;
+
+  // Calculate Overdue Tasks
+  const overdueTasks = myTasks.filter((t) => {
+    if (!t.dueDate || t.status === "Done") return false;
+    return new Date(t.dueDate) < new Date();
+  });
 
   return (
     <div className="space-y-8">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold">Welcome back, User</h1>
+          <h1 className="text-2xl font-bold">
+            Welcome back, {user?.firstName}
+          </h1>
           <p className="text-neutral-400 mt-1">
             Here's what's happening with your projects today.
           </p>
@@ -51,32 +88,32 @@ const Dashboard = () => {
         </button>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid - Now using Dynamic Data */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard
           label="Total Projects"
-          value={loading ? "-" : projects.length} // Dynamic Count
+          value={projects.length}
           sub="projects in Cloud Ops"
           icon={Folder}
           color="bg-blue-500/10 text-blue-500"
         />
         <StatCard
           label="Completed"
-          value="0"
+          value={completedProjects}
           sub="of total projects"
           icon={CheckCircle}
           color="bg-green-500/10 text-green-500"
         />
         <StatCard
           label="My Tasks"
-          value="3"
+          value={myTasks.length}
           sub="assigned to me"
           icon={Clock}
           color="bg-purple-500/10 text-purple-500"
         />
         <StatCard
           label="Overdue"
-          value="0"
+          value={overdueTasks.length}
           sub="needs attention"
           icon={AlertTriangle}
           color="bg-orange-500/10 text-orange-500"
@@ -85,7 +122,7 @@ const Dashboard = () => {
 
       {/* Main Content Split */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left: Project Overview (Takes up 2 cols) */}
+        {/* Left: Project Overview */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex justify-between items-end">
             <h2 className="text-lg font-semibold">Project Overview</h2>
@@ -97,65 +134,55 @@ const Dashboard = () => {
             </button>
           </div>
 
-          {/* DYNAMIC PROJECT LIST */}
           <div className="space-y-4">
             {loading ? (
               <div className="text-neutral-500 text-sm">
                 Loading projects...
               </div>
             ) : projects.length > 0 ? (
-              projects.slice(0, 3).map(
-                (
-                  project // Show only first 3
-                ) => (
-                  <div
-                    key={project._id || project.id}
-                    onClick={() =>
-                      navigate(`/projects/${project._id || project.id}`)
-                    }
-                    className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 hover:border-neutral-700 transition-colors cursor-pointer group"
-                  >
-                    <div className="flex justify-between mb-2">
-                      <h3 className="font-semibold text-lg text-white group-hover:text-blue-400 transition-colors">
-                        {project.title}
-                      </h3>
-                      <span className="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded font-medium">
-                        {project.status || "ACTIVE"}
+              projects.slice(0, 3).map((project) => (
+                <div
+                  key={project._id || project.id}
+                  onClick={() =>
+                    navigate(`/projects/${project._id || project.id}`)
+                  }
+                  className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 hover:border-neutral-700 transition-colors cursor-pointer group"
+                >
+                  <div className="flex justify-between mb-2">
+                    <h3 className="font-semibold text-lg text-white group-hover:text-blue-400 transition-colors">
+                      {project.title}
+                    </h3>
+                    <span className="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded font-medium">
+                      {project.status || "ACTIVE"}
+                    </span>
+                  </div>
+
+                  <p className="text-neutral-400 text-sm mb-4 line-clamp-2">
+                    {project.description}
+                  </p>
+
+                  <div className="flex items-center justify-between text-xs text-neutral-500 mt-4">
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`font-bold ${
+                          project.priority === "HIGH"
+                            ? "text-orange-400"
+                            : "text-neutral-400"
+                        }`}
+                      >
+                        {project.priority || "MEDIUM"}
+                      </span>
+                      <span>
+                        • Created{" "}
+                        {new Date(project.createdAt).toLocaleDateString()}
                       </span>
                     </div>
-
-                    <p className="text-neutral-400 text-sm mb-4 line-clamp-2">
-                      {project.description}
-                    </p>
-
-                    {/* Updated Meta Section */}
-                    <div className="flex items-center justify-between text-xs text-neutral-500 mt-4">
-                      <div className="flex items-center gap-3">
-                        {/* Priority */}
-                        <span
-                          className={`font-bold ${
-                            project.priority === "HIGH"
-                              ? "text-orange-400"
-                              : "text-neutral-400"
-                          }`}
-                        >
-                          {project.priority || "MEDIUM"}
-                        </span>
-
-                        {/* Date */}
-                        <span>
-                          • Created{" "}
-                          {new Date(project.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="w-full bg-neutral-800 h-1.5 rounded-full mt-3">
-                      <div className="bg-blue-500 h-1.5 rounded-full w-[25%]"></div>
-                    </div>
                   </div>
-                )
-              )
+                  <div className="w-full bg-neutral-800 h-1.5 rounded-full mt-3">
+                    <div className="bg-blue-500 h-1.5 rounded-full w-[25%]"></div>
+                  </div>
+                </div>
+              ))
             ) : (
               <div className="p-8 text-center bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-500">
                 No projects yet. Create one to get started!
@@ -164,28 +191,38 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Right: My Tasks & Overdue (Takes up 1 col) */}
+        {/* Right: My Tasks & Overdue - Now Dynamic */}
         <div className="space-y-6">
           {/* My Tasks Widget */}
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold text-sm">My Tasks</h3>
-              <span className="bg-green-500/20 text-green-400 text-xs px-1.5 py-0.5 rounded">
-                3
+              <span className="bg-blue-500/20 text-blue-400 text-xs px-1.5 py-0.5 rounded">
+                {myTasks.length}
               </span>
             </div>
+
             <div className="space-y-3">
-              <TaskItem title="Set Up EKS Cluster" priority="HIGH" />
-              <TaskItem
-                title="Migrate to Playwright"
-                priority="HIGH"
-                type="IMPROVEMENT"
-              />
-              <TaskItem
-                title="Visual Snapshot Comp"
-                priority="LOW"
-                type="FEATURE"
-              />
+              {myTasks.length > 0 ? (
+                myTasks.slice(0, 5).map((task) => (
+                  <div
+                    key={task._id}
+                    onClick={() => navigate(`/tasks/${task._id}`)}
+                  >
+                    <TaskItem
+                      key={task._id}
+                      title={task.title}
+                      priority={task.priority}
+                      type={task.type}
+                      status={task.status}
+                    />
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-neutral-500 text-center py-2">
+                  No tasks assigned.
+                </p>
+              )}
             </div>
           </div>
 
@@ -194,13 +231,25 @@ const Dashboard = () => {
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold text-sm">Overdue</h3>
               <span className="bg-red-500/20 text-red-400 text-xs px-1.5 py-0.5 rounded">
-                0
+                {overdueTasks.length}
               </span>
             </div>
-            <div className="space-y-3 opacity-60">
-              <p className="text-xs text-neutral-500 text-center py-2">
-                No overdue tasks
-              </p>
+            <div className="space-y-3">
+              {overdueTasks.length > 0 ? (
+                overdueTasks.slice(0, 3).map((task) => (
+                  <div
+                    key={task._id}
+                    className="text-xs text-red-400 border border-red-900/30 bg-red-900/10 p-2 rounded flex justify-between"
+                  >
+                    <span className="truncate">{task.title}</span>
+                    <span>{new Date(task.dueDate).toLocaleDateString()}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-neutral-500 text-center py-2 opacity-60">
+                  No overdue tasks
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -225,18 +274,33 @@ const StatCard = ({ label, value, sub, icon: Icon, color }) => (
   </div>
 );
 
-const TaskItem = ({ title, priority, type = "TASK" }) => (
-  <div className="bg-neutral-950 p-3 rounded-lg border border-neutral-800 hover:border-neutral-700 cursor-pointer">
-    <h4 className="text-sm font-medium mb-1">{title}</h4>
-    <div className="flex gap-2 text-[10px] uppercase tracking-wider font-bold">
-      <span className="text-neutral-500">{type}</span>
-      <span
-        className={priority === "HIGH" ? "text-orange-400" : "text-blue-400"}
-      >
-        {priority} Priority
-      </span>
+// Updated TaskItem to handle statuses
+const TaskItem = ({ title, priority, type = "TASK", status }) => {
+  const getPriorityColor = (p) => {
+    if (p === "HIGH") return "text-orange-400";
+    if (p === "MEDIUM") return "text-blue-400";
+    return "text-neutral-400";
+  };
+
+  return (
+    <div className="bg-neutral-950 p-3 rounded-lg border border-neutral-800 hover:border-neutral-700 cursor-pointer group">
+      <div className="flex justify-between items-start mb-1">
+        <h4 className="text-sm font-medium text-neutral-200 group-hover:text-white transition-colors truncate w-3/4">
+          {title}
+        </h4>
+        {status === "Done" && (
+          <CheckCircle size={14} className="text-green-500" />
+        )}
+      </div>
+
+      <div className="flex gap-2 text-[10px] uppercase tracking-wider font-bold items-center">
+        <span className="text-neutral-500 bg-neutral-900 px-1.5 py-0.5 rounded">
+          {type}
+        </span>
+        <span className={getPriorityColor(priority)}>{priority}</span>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default Dashboard;

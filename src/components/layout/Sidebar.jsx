@@ -23,13 +23,15 @@ function Sidebar() {
   
   const [projects, setProjects] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
+  // 👇 NEW: State for My Tasks Count
+  const [myTaskCount, setMyTaskCount] = useState(0);
 
   // Permission Logic
   const isGlobalAdmin = user?.publicMetadata?.role === "admin";
   const isOrgAdmin = orgRole === "org:admin";
   const canCreateOrg = isGlobalAdmin || isOrgAdmin;
 
-  // Fetch Projects
+  // 1. Fetch Projects
   const fetchSidebarProjects = async () => {
     if (!orgId) return; 
     try {
@@ -40,11 +42,9 @@ function Sidebar() {
     }
   };
 
-  // 👇 UPDATED: Count Admin Requests + UNREAD User Notifications
+  // 2. Fetch Notification Count
   const fetchNotificationCounts = async () => {
     let total = 0;
-
-    // 1. User Notifications (Count only unread)
     try {
       const userRes = await api.get("/notifications");
       const unreadCount = userRes.data.filter(n => !n.read).length;
@@ -53,7 +53,6 @@ function Sidebar() {
       console.error("User notification error:", error);
     }
 
-    // 2. Admin Requests (Count all pending)
     if (orgId && canCreateOrg) {
       try {
         const adminRes = await api.get("/admin-actions/pending", { params: { orgId } });
@@ -62,23 +61,37 @@ function Sidebar() {
         // Ignore permission errors
       }
     }
-
     setPendingCount(total);
+  };
+
+  // 👇 NEW: 3. Fetch My Tasks Count
+  const fetchMyTaskCount = async () => {
+    if (!user?.id) return;
+    try {
+      const res = await api.get(`/tasks/user/${user.id}`);
+      setMyTaskCount(res.data.length);
+    } catch (error) {
+      console.error("Failed to fetch my tasks", error);
+    }
   };
 
   useEffect(() => {
     fetchSidebarProjects();
-    fetchNotificationCounts(); // Initial load
+    fetchNotificationCounts(); 
+    fetchMyTaskCount(); // 👇 NEW: Fetch on mount
 
-    // Listen for updates from other components
+    // Listeners for updates
     window.addEventListener("projectUpdate", fetchSidebarProjects);
     window.addEventListener("notificationUpdate", fetchNotificationCounts);
+    // 👇 NEW: Listen for task updates (e.g. creation)
+    window.addEventListener("taskUpdate", fetchMyTaskCount);
 
     return () => {
       window.removeEventListener("projectUpdate", fetchSidebarProjects);
       window.removeEventListener("notificationUpdate", fetchNotificationCounts);
+      window.removeEventListener("taskUpdate", fetchMyTaskCount);
     };
-  }, [orgId, canCreateOrg]); 
+  }, [orgId, canCreateOrg, user?.id]); 
 
   const inviteCount = user?.emailAddresses?.reduce((acc, email) => {
     return acc + (email.invitations?.length || 0);
@@ -94,7 +107,6 @@ function Sidebar() {
     
     { icon: Mail, label: "Invitations", path: "/invitations", badge: inviteCount },
     
-    // Uses the calculated pendingCount
     ...(orgId ? [{ icon: Bell, label: "Notifications", path: "/notifications", badge: pendingCount }] : []),
 
     ...(canCreateOrg ? [{ icon: Building, label: "Create Org", path: "/create-organization" }] : []),
@@ -140,6 +152,7 @@ function Sidebar() {
           />
         ))}
 
+        {/* My Task Section - Only show if in Org */}
         {orgId && (
           <div className="pt-6">
             <div className="px-3 mb-2 flex items-center justify-between group cursor-pointer">
@@ -147,7 +160,10 @@ function Sidebar() {
                 <CheckSquare size={18} />
                 <span className="text-sm font-medium">My Tasks</span>
               </div>
-              <span className="bg-neutral-800 text-neutral-400 text-xs px-2 py-0.5 rounded-full">3</span>
+              {/* 👇 UPDATED: Use dynamic count */}
+              <span className="bg-neutral-800 text-neutral-400 text-xs px-2 py-0.5 rounded-full">
+                {myTaskCount}
+              </span>
             </div>
           </div>
         )}

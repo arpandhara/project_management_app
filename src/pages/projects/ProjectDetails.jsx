@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, Plus, LayoutList, Calendar as CalendarIcon, 
   BarChart2, Settings, User, Zap, CheckCircle2, Clock, 
-  Users, UserPlus
+  Users, UserPlus, ChevronDown, X
 } from "lucide-react";
 import { useUser, useAuth } from "@clerk/clerk-react"; 
 import NewTaskModal from "../../components/specific/NewTaskModal";
@@ -15,13 +15,20 @@ const ProjectDetails = () => {
   const { user } = useUser();
   const { orgRole } = useAuth(); 
   
-  // State
   const [project, setProject] = useState(null);
   const [members, setMembers] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [newMemberEmail, setNewMemberEmail] = useState("");
+
+  // 👇 NEW: Filter State
+  const [filters, setFilters] = useState({
+    status: "All",
+    type: "All",
+    priority: "All",
+    assignee: "All"
+  });
 
   const isAdmin = user?.publicMetadata?.role === "admin" || orgRole === "org:admin";
 
@@ -47,30 +54,40 @@ const ProjectDetails = () => {
   const handleAddMember = async (e) => {
     e.preventDefault();
     if (!newMemberEmail) return;
-    
     try {
-      // 1. Send Request
       const res = await api.put(`/projects/${id}/members`, { email: newMemberEmail });
-      
-      // 2. Update UI Immediately using the response data
-      // (We append the new member to the existing list)
       if (res.data.member) {
         setMembers((prev) => [...prev, res.data.member]);
       }
-
       setNewMemberEmail("");
-      
-      // 3. Show Success Message
       alert("Member added successfully!");
-      
     } catch (error) {
       alert(error.response?.data?.message || "Failed to add member");
     }
   };
 
-  const handleTaskCreated = () => {
-    fetchData(); 
-  };
+  // 👇 NEW: Filter Logic
+  const filteredTasks = tasks.filter(task => {
+    const matchStatus = filters.status === "All" || task.status === filters.status;
+    const matchType = filters.type === "All" || task.type === filters.type;
+    const matchPriority = filters.priority === "All" || task.priority === filters.priority;
+    
+    // Assignee check: "All" or if the selected ID exists in the task's assignees array
+    const matchAssignee = filters.assignee === "All" || (task.assignees && task.assignees.includes(filters.assignee));
+
+    return matchStatus && matchType && matchPriority && matchAssignee;
+  });
+
+  // Filter Options
+  const statusOptions = ["All", "To Do", "In Progress", "Done"];
+  const priorityOptions = ["All", "HIGH", "MEDIUM", "LOW"];
+  const typeOptions = ["All", "TASK", "BUG", "IMPROVEMENT", "DESIGN", "CONTENT_WRITING", "SOCIAL_MEDIA", "OTHER"];
+  
+  // Create Assignee Options: Label = Name, Value = ID
+  const assigneeOptions = [
+    { label: "All Assignees", value: "All" },
+    ...members.map(m => ({ label: `${m.firstName} ${m.lastName}`, value: m.clerkId }))
+  ];
 
   if (loading) return <div className="p-8 text-neutral-400">Loading project details...</div>;
   if (!project) return <div className="p-8 text-neutral-400">Project not found</div>;
@@ -156,12 +173,43 @@ const ProjectDetails = () => {
         <TabButton icon={Settings} label="Settings" />
       </div>
 
-      {/* Filter & List */}
+      {/* Filter Row */}
       <div className="flex flex-wrap gap-3 py-2">
-        <FilterDropdown label="All Statuses" />
-        <FilterDropdown label="All Types" />
-        <FilterDropdown label="All Priorities" />
-        <FilterDropdown label="All Assignees" />
+        <FilterDropdown 
+          label="Status" 
+          options={statusOptions} 
+          value={filters.status} 
+          onChange={(val) => setFilters({...filters, status: val})} 
+        />
+        <FilterDropdown 
+          label="Type" 
+          options={typeOptions} 
+          value={filters.type} 
+          onChange={(val) => setFilters({...filters, type: val})} 
+        />
+        <FilterDropdown 
+          label="Priority" 
+          options={priorityOptions} 
+          value={filters.priority} 
+          onChange={(val) => setFilters({...filters, priority: val})} 
+        />
+        <FilterDropdown 
+          label="Assignee" 
+          options={assigneeOptions} 
+          value={filters.assignee} 
+          onChange={(val) => setFilters({...filters, assignee: val})} 
+          isObjectOptions={true} // Special flag for Assignees because options are objects {label, value}
+        />
+        
+        {/* Reset Button (only show if filters are active) */}
+        {(filters.status !== "All" || filters.type !== "All" || filters.priority !== "All" || filters.assignee !== "All") && (
+          <button 
+            onClick={() => setFilters({ status: "All", type: "All", priority: "All", assignee: "All" })}
+            className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors px-2"
+          >
+            <X size={14} /> Clear
+          </button>
+        )}
       </div>
 
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
@@ -175,42 +223,65 @@ const ProjectDetails = () => {
         </div>
 
         <div>
-          {tasks.length > 0 ? (
-            tasks.map((task) => (
-              <div key={task._id} className="grid grid-cols-12 gap-4 p-4 border-b border-neutral-800/50 hover:bg-neutral-800/50 transition-colors items-center text-sm last:border-0">
+          {/* 👇 UPDATED: Mapping filteredTasks instead of tasks */}
+          {filteredTasks.length > 0 ? (
+            filteredTasks.map((task) => (
+              <div key={task._id} onClick={() => navigate(`/tasks/${task._id}`)} className="grid grid-cols-12 gap-4 p-4 border-b border-neutral-800/50 hover:bg-neutral-800/50 transition-colors items-center text-sm last:border-0">
+                
+                {/* Title & Color Dot */}
                 <div className="col-span-5 flex items-center gap-3">
                   <div className={`w-2 h-2 rounded-full ${task.type === 'OTHER' ? 'bg-orange-400' : 'bg-green-400'}`}></div>
                   <span className="font-medium text-white">{task.title}</span>
                 </div>
+
+                {/* Type Badge */}
                 <div className="col-span-2">
                   <span className="flex items-center gap-1.5 text-xs font-medium uppercase text-neutral-400 border border-neutral-800 bg-neutral-800/50 px-2 py-0.5 rounded w-fit">
-                    {task.type === 'TASK' ? <CheckCircle2 size={12}/> : <LayoutList size={12}/>}
-                    {task.type}
+                    <LayoutList size={12}/>
+                    {task.type ? task.type.replace("_", " ") : "TASK"}
                   </span>
                 </div>
+
+                {/* Priority */}
                 <div className="col-span-1">
                   <span className={`text-xs font-bold px-2 py-1 rounded ${task.priority === 'HIGH' ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'}`}>
                     {task.priority}
                   </span>
                 </div>
+
+                {/* Status */}
                 <div className="col-span-1 text-neutral-300">{task.status}</div>
-                <div className="col-span-2 flex items-center gap-2">
-                  {(() => {
-                    const assignee = members.find(m => m.clerkId === task.assigneeId);
-                    return assignee ? (
-                      <>
-                        <img src={assignee.photo} className="w-6 h-6 rounded-full" alt="Assignee" />
-                        <span className="text-neutral-300 truncate">{assignee.firstName}</span>
-                      </>
-                    ) : (<span className="text-neutral-500 text-xs">Unassigned</span>);
-                  })()}
+
+                {/* Multiple Assignees Rendering */}
+                <div className="col-span-2 flex items-center gap-1">
+                  {task.assignees && task.assignees.length > 0 ? (
+                    <div className="flex -space-x-2 overflow-hidden">
+                      {task.assignees.map((assigneeId) => {
+                        const member = members.find((m) => m.clerkId === assigneeId);
+                        if (!member) return null;
+                        return (
+                          <img
+                            key={assigneeId}
+                            src={member.photo}
+                            className="inline-block h-6 w-6 rounded-full ring-2 ring-neutral-900 bg-neutral-800 object-cover"
+                            alt={member.firstName}
+                            title={`${member.firstName} ${member.lastName}`}
+                          />
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <span className="text-neutral-500 text-xs">Unassigned</span>
+                  )}
                 </div>
+
+                {/* Due Date */}
                 <div className="col-span-1 text-right text-neutral-400 text-xs">
                   {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "-"}
                 </div>
               </div>
             ))
-          ) : <div className="p-8 text-center text-neutral-500">No tasks created yet.</div>}
+          ) : <div className="p-8 text-center text-neutral-500">No tasks found matching filters.</div>}
         </div>
       </div>
 
@@ -219,7 +290,7 @@ const ProjectDetails = () => {
         onClose={() => setIsTaskModalOpen(false)} 
         projectId={id} 
         projectMembers={members} 
-        onTaskCreated={handleTaskCreated} 
+        onTaskCreated={() => fetchData()} 
       />
     </div>
   );
@@ -242,10 +313,67 @@ const TabButton = ({ icon: Icon, label, active }) => (
   </button>
 );
 
-const FilterDropdown = ({ label }) => (
-  <button className="bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-neutral-300 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors">
-    {label} <span className="text-neutral-500">▼</span>
-  </button>
-);
+// 👇 NEW: Interactive Filter Dropdown
+const FilterDropdown = ({ label, options, value, onChange, isObjectOptions = false }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const getLabel = () => {
+    if (value === "All") return `All ${label}s`; // e.g. "All Statuses"
+    if (isObjectOptions) {
+      return options.find(o => o.value === value)?.label || value;
+    }
+    return value.replace("_", " "); // Clean up "SOCIAL_MEDIA" -> "SOCIAL MEDIA"
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors border ${
+          value !== "All" 
+            ? "bg-blue-600/10 border-blue-600/50 text-blue-400" 
+            : "bg-neutral-900 border-neutral-800 hover:bg-neutral-800 text-neutral-300"
+        }`}
+      >
+        {getLabel()} <ChevronDown size={14} className={value !== "All" ? "text-blue-400" : "text-neutral-500"} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 w-48 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl z-20 overflow-hidden">
+          {options.map((option) => {
+            const optValue = isObjectOptions ? option.value : option;
+            const optLabel = isObjectOptions ? option.label : option.replace("_", " ");
+            
+            return (
+              <button
+                key={optValue}
+                onClick={() => {
+                  onChange(optValue);
+                  setIsOpen(false);
+                }}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-neutral-800 transition-colors ${
+                  value === optValue ? "text-blue-400 bg-blue-600/5" : "text-neutral-300"
+                }`}
+              >
+                {optLabel}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default ProjectDetails;
