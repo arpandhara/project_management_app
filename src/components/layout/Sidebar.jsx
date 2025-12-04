@@ -10,7 +10,8 @@ import {
   Plus,
   LogOut,
   Mail,
-  Building // Icon for Create Org
+  Building ,
+  Bell
 } from "lucide-react";
 import api from "../../services/api";
 
@@ -68,10 +69,14 @@ function Sidebar() {
     
     // Always show Invitations and Settings
     { icon: Mail, label: "Invitations", path: "/invitations", badge: inviteCount },
-    { icon: Settings, label: "Settings", path: "/settings" },
 
     // Conditionally show "Create Org" button
-    ...(canCreateOrg ? [{ icon: Building, label: "Create Org", path: "/create-organization" }] : [])
+    ...(canCreateOrg ? [{ icon: Building, label: "Create Org", path: "/create-organization" }] : []),
+
+    ...(orgId ? [{ icon: Bell, label: "Notifications", path: "/notifications" }] : []),
+
+    { icon: Settings, label: "Settings", path: "/settings" },
+
   ];
 
   return (

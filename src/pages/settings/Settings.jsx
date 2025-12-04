@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { UserProfile, useUser, useOrganization } from "@clerk/clerk-react"; 
-import { Building2, User, Upload, Trash2, AlertTriangle } from "lucide-react"; // Added Icons
+import { Building2, User, Upload, Trash2, AlertTriangle } from "lucide-react"; 
+import api from "../../services/api"; // Ensure API is imported
 
 const Settings = () => {
   const { user } = useUser();
@@ -62,7 +63,7 @@ const Settings = () => {
     }
   };
 
-  // 👇 NEW: Handle Delete Organization
+  // 👇 UPDATED: Smart Delete Logic
   const handleDeleteOrganization = async () => {
     if (!organization) return;
 
@@ -77,12 +78,34 @@ const Settings = () => {
 
     setIsDeleting(true);
     try {
-      await organization.destroy();
-      alert("Organization deleted successfully.");
-      window.location.href = "/"; // Redirect to home/personal workspace
+      // 1. Check how many admins exist
+      const adminMemberships = await organization.getMemberships({
+        role: ["org:admin"],
+        pageSize: 5, // We just need to know if it's > 1
+      });
+
+      const adminCount = adminMemberships.totalCount;
+
+      // 2. Decision Logic
+      if (adminCount > 1) {
+        // Case A: Multiple Admins -> Must Request Approval
+        await api.post("/admin-actions/delete-org/request", { 
+          orgId: organization.id 
+        });
+        alert("Deletion request sent! Since there are other admins, one of them must approve this action in the Notifications page.");
+      } else {
+        // Case B: Single Admin (Just you) -> Delete Immediately
+        await organization.destroy();
+        alert("Organization deleted successfully.");
+        window.location.href = "/"; // Redirect to home
+      }
+
     } catch (error) {
-      console.error("Delete failed:", error);
-      alert(error.errors?.[0]?.message || "Failed to delete organization.");
+      console.error("Delete/Request failed:", error);
+      // Handle both Axios errors (backend) and Clerk errors
+      const msg = error.response?.data?.message || error.errors?.[0]?.message || "Failed to process deletion.";
+      alert(msg);
+    } finally {
       setIsDeleting(false);
     }
   };
@@ -224,7 +247,7 @@ const Settings = () => {
                 </div>
               </div>
 
-              {/* 👇 NEW: Danger Zone Card */}
+              {/* Danger Zone Card */}
               <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6 space-y-4">
                 <div className="flex items-center gap-3 text-red-500">
                   <AlertTriangle size={20} />
@@ -241,7 +264,7 @@ const Settings = () => {
                     disabled={isDeleting}
                     className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 disabled:opacity-50"
                   >
-                    {isDeleting ? "Deleting..." : <><Trash2 size={16} /> Delete Organization</>}
+                    {isDeleting ? "Processing..." : <><Trash2 size={16} /> Delete Organization</>}
                   </button>
                 </div>
               </div>

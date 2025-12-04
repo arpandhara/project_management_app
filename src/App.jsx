@@ -14,6 +14,7 @@ import SignUpPage from "./pages/auth/SignUpPage";
 import Invitations from "./pages/team/Invitations";
 import MemberDetails from "./pages/team/MemberDetails";
 import CreateOrganizationPage from "./pages/organization/CreateOrganizationPage";
+import Notifications from "./pages/notifications/Notifications";
 // API Helper
 import { setupInterceptors } from "./services/api";
 
@@ -51,6 +52,7 @@ const App = () => {
             <Route path="invitations" element={<Invitations />} />
             <Route path="team/:userId" element={<MemberDetails />} />
             <Route path="create-organization" element={<CreateOrganizationPage />} />
+            <Route path="notifications" element={<Notifications />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
