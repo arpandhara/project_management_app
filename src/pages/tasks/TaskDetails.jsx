@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, Calendar, Link as LinkIcon, 
   Github, FileText, AlertCircle, X, Trash2, 
-  Users, Check, ChevronDown 
+  Users, Check, ChevronDown , UserPlus
 } from "lucide-react";
 import { useUser, useAuth } from "@clerk/clerk-react";
 import api from "../../services/api";
@@ -21,12 +21,16 @@ const TaskDetails = () => {
   
   // Link Input State
   const [newLink, setNewLink] = useState({ name: "", url: "", type: "DOC" });
-
+  
   // Assignee Dropdown State
   const [isAssigneeOpen, setIsAssigneeOpen] = useState(false);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+
   const assigneeRef = useRef(null);
+  const inviteRef = useRef(null);
 
   const isAdmin = user?.publicMetadata?.role === "admin" || orgRole === "org:admin";
+  const isAssignee = task?.assignees?.includes(user?.id);
 
   // Click outside to close assignee dropdown
   useEffect(() => {
@@ -46,10 +50,7 @@ const TaskDetails = () => {
         const taskRes = await api.get(`/tasks/${taskId}`);
         setTask(taskRes.data);
 
-        // 2. Fetch Project Members (Need this to map IDs to Names/Avatars)
-        // We use the projectId from the fetched task
         if (taskRes.data.projectId) {
-          // Handle both populated object or direct string ID
           const pid = taskRes.data.projectId._id || taskRes.data.projectId;
           const memRes = await api.get(`/projects/${pid}/members`);
           setProjectMembers(memRes.data);
@@ -73,7 +74,6 @@ const TaskDetails = () => {
       await api.put(`/tasks/${taskId}`, { [field]: value });
     } catch (err) {
       alert("Failed to update task");
-      // Revert on failure (optional, requires prev state tracking)
     }
   };
 
@@ -95,6 +95,16 @@ const TaskDetails = () => {
       newAssignees.push(memberId);
     }
     await handleUpdate("assignees", newAssignees);
+  };
+
+  const handleInvite = async (memberId) => {
+    try {
+      await api.post(`/tasks/${taskId}/invite`, { targetUserId: memberId });
+      alert("Invitation sent!");
+      setIsInviteOpen(false);
+    } catch (error) {
+      alert(error.response?.data?.message || "Failed to send invite");
+    }
   };
 
   const handleAddLink = async (e) => {
@@ -125,8 +135,12 @@ const TaskDetails = () => {
     </div>
   );
 
+  const unassignedMembers = projectMembers.filter(
+    m => !task.assignees.includes(m.clerkId)
+  );
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="space-y-6 h-full">
       {/* Top Bar */}
       <div className="flex justify-between items-center">
         <button onClick={() => navigate(-1)} className="text-neutral-400 hover:text-white flex items-center gap-2">
@@ -264,6 +278,40 @@ const TaskDetails = () => {
                 )}
               </div>
             </div>
+
+
+            {isAssignee && (
+              <div className="pt-4 border-t border-neutral-800">
+                <label className="text-xs text-neutral-500 uppercase font-bold mb-2 block">Need Help?</label>
+                <div className="relative" ref={inviteRef}>
+                  <button 
+                    onClick={() => setIsInviteOpen(!isInviteOpen)}
+                    className="w-full flex items-center justify-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-white py-2 rounded-lg text-sm font-medium transition-colors border border-neutral-700"
+                  >
+                    <UserPlus size={16} /> Invite Member
+                  </button>
+
+                  {isInviteOpen && (
+                    <div className="absolute top-full left-0 mt-2 w-full bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl z-20 max-h-60 overflow-y-auto">
+                      {unassignedMembers.length > 0 ? (
+                        unassignedMembers.map(m => (
+                          <div 
+                            key={m.clerkId} 
+                            onClick={() => handleInvite(m.clerkId)}
+                            className="flex items-center gap-3 px-3 py-2 hover:bg-neutral-800 cursor-pointer transition-colors"
+                          >
+                             <img src={m.photo} className="w-6 h-6 rounded-full" />
+                             <span className="text-sm text-neutral-300">{m.firstName} {m.lastName}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-xs text-neutral-500">Everyone is already assigned!</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Admin Only Fields */}
             <div className="grid grid-cols-2 gap-3">

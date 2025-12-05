@@ -4,20 +4,17 @@ import { Check, X, UserMinus, Trash2, Bell, Info } from "lucide-react";
 import api from "../../services/api";
 
 const Notifications = () => {
-  const { orgId, orgRole } = useAuth(); // 1. Get orgRole
+  const { orgId, orgRole } = useAuth();
   const { user } = useUser();
   
-  // State for Admin Requests
   const [adminRequests, setAdminRequests] = useState([]);
-  // State for User Notifications
   const [userNotifications, setUserNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch Data
   const fetchData = async () => {
     setLoading(true);
 
-    // 2. Fetch Admin Actions (Only if User is Org Admin)
+    // 1. Admin Actions (Only if Org Admin)
     if (orgRole === "org:admin") {
       try {
         const adminRes = await api.get("/admin-actions/pending", { params: { orgId } });
@@ -27,7 +24,7 @@ const Notifications = () => {
       }
     }
 
-    // 3. Fetch User Notifications (For Everyone)
+    // 2. User Notifications (Everyone)
     try {
       const userRes = await api.get("/notifications");
       setUserNotifications(userRes.data || []);
@@ -38,11 +35,11 @@ const Notifications = () => {
     setLoading(false);
   };
 
- useEffect(() => {
+  useEffect(() => {
     const init = async () => {
       if (orgId) await fetchData(); 
       
-      // 👇 NEW: Mark notifications as read and refresh badge immediately
+      // Mark as read immediately on open
       try {
         await api.put("/notifications/mark-read");
         window.dispatchEvent(new Event("notificationUpdate"));
@@ -51,11 +48,27 @@ const Notifications = () => {
       }
     };
     init();
-  }, [orgId, orgRole]); // Re-run if role changes
+  }, [orgId, orgRole]);
+
+  // Handle Task Invite Response
+  const handleInviteResponse = async (noteId, action) => {
+    try {
+      await api.post("/tasks/invite/respond", {
+        notificationId: noteId,
+        action: action // 'ACCEPT' or 'DECLINE'
+      });
+      // Remove from UI
+      setUserNotifications((prev) => prev.filter(n => n._id !== noteId));
+      // Trigger global update (Sidebar badge & My Tasks count)
+      window.dispatchEvent(new Event("notificationUpdate"));
+      window.dispatchEvent(new Event("taskUpdate")); 
+    } catch (error) {
+      alert("Failed to respond to invite");
+    }
+  };
 
   const handleApprove = async (req) => {
-    const actionName = req.type === "DELETE_ORG" ? "delete this organization" : "approve this action";
-    if (!window.confirm(`Are you sure you want to ${actionName}?`)) return;
+    if (!window.confirm(`Are you sure you want to approve this action?`)) return;
 
     try {
       let endpoint = "";
@@ -69,6 +82,7 @@ const Notifications = () => {
         window.location.href = "/"; 
       } else {
         fetchData(); 
+        window.dispatchEvent(new Event("notificationUpdate"));
       }
     } catch (error) {
       alert(error.response?.data?.message || "Failed to approve.");
@@ -81,16 +95,17 @@ const Notifications = () => {
       await api.post(`/admin-actions/reject/${req._id}`);
       alert("Request denied and removed.");
       fetchData(); 
+      window.dispatchEvent(new Event("notificationUpdate"));
     } catch (error) {
       alert(error.response?.data?.message || "Failed to deny.");
     }
   };
 
-  // Handle Dismissing User Notification
   const handleDismiss = async (noteId) => {
     try {
       await api.delete(`/notifications/${noteId}`);
       setUserNotifications((prev) => prev.filter(n => n._id !== noteId));
+      window.dispatchEvent(new Event("notificationUpdate"));
     } catch (error) {
       console.error("Failed to dismiss", error);
     }
@@ -105,7 +120,7 @@ const Notifications = () => {
         <p className="text-neutral-400 mt-1">Updates and pending actions.</p>
       </div>
 
-      {/* User Notifications Section */}
+      {/* User Notifications */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
           <Bell size={18} /> Inbox
@@ -121,18 +136,37 @@ const Notifications = () => {
                 </div>
                 <p className="text-white text-sm">{note.message}</p>
               </div>
-              <button
-                onClick={() => handleDismiss(note._id)}
-                className="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-              >
-                OK
-              </button>
+              
+              {/* 👇 Logic for Different Notification Types */}
+              {note.type === 'TASK_INVITE' ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleInviteResponse(note._id, 'ACCEPT')}
+                    className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => handleInviteResponse(note._id, 'DECLINE')}
+                    className="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border border-neutral-700"
+                  >
+                    Decline
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleDismiss(note._id)}
+                  className="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  OK
+                </button>
+              )}
             </div>
           ))
         )}
       </div>
 
-      {/* Admin Requests Section (Only render if requests exist) */}
+      {/* Admin Requests (Only render if requests exist) */}
       {adminRequests.length > 0 && (
         <div className="space-y-4 pt-6 border-t border-neutral-800">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">

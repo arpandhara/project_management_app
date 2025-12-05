@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect , useRef } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useClerk, useAuth, OrganizationSwitcher, useUser } from "@clerk/clerk-react";
 import {
@@ -23,8 +23,9 @@ function Sidebar() {
   
   const [projects, setProjects] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
-  // 👇 NEW: State for My Tasks Count
   const [myTaskCount, setMyTaskCount] = useState(0);
+
+  const lastNotificationIdRef = useRef(null);
 
   // Permission Logic
   const isGlobalAdmin = user?.publicMetadata?.role === "admin";
@@ -47,8 +48,29 @@ function Sidebar() {
     let total = 0;
     try {
       const userRes = await api.get("/notifications");
+      const notifications = userRes.data;
       const unreadCount = userRes.data.filter(n => !n.read).length;
       total += unreadCount;
+
+      if (notifications.length > 0) {
+        const latest = notifications[0]; // Assumes sorted by createdAt desc
+        
+        // If we have a new ID that is different from the last one we saw...
+        if (lastNotificationIdRef.current && lastNotificationIdRef.current !== latest._id && !latest.read) {
+          // Trigger the Toast Event
+          const event = new CustomEvent("show-toast", {
+            detail: { 
+              message: latest.message, 
+              link: "/notifications" 
+            }
+          });
+          window.dispatchEvent(event);
+        }
+        
+        // Update the ref
+        lastNotificationIdRef.current = latest._id;
+      }
+
     } catch (error) {
       console.error("User notification error:", error);
     }
@@ -64,7 +86,7 @@ function Sidebar() {
     setPendingCount(total);
   };
 
-  // 👇 NEW: 3. Fetch My Tasks Count
+
   const fetchMyTaskCount = async () => {
     if (!user?.id) return;
     try {
@@ -78,13 +100,17 @@ function Sidebar() {
   useEffect(() => {
     fetchSidebarProjects();
     fetchNotificationCounts(); 
-    fetchMyTaskCount(); // 👇 NEW: Fetch on mount
+    fetchMyTaskCount(); 
 
     // Listeners for updates
     window.addEventListener("projectUpdate", fetchSidebarProjects);
     window.addEventListener("notificationUpdate", fetchNotificationCounts);
-    // 👇 NEW: Listen for task updates (e.g. creation)
     window.addEventListener("taskUpdate", fetchMyTaskCount);
+
+    const interval = setInterval(() => {
+      fetchNotificationCounts();
+      fetchMyTaskCount();
+    }, 10000);
 
     return () => {
       window.removeEventListener("projectUpdate", fetchSidebarProjects);
