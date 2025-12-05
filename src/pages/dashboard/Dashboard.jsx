@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Folder, CheckCircle, Clock, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "../../services/api";
-import { useAuth, useUser } from "@clerk/clerk-react"; // Import useUser
+import { useAuth, useUser } from "@clerk/clerk-react";
+import { getSocket } from "../../services/socket"; // 1. Import socket
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -10,10 +11,9 @@ const Dashboard = () => {
   const { orgId } = useAuth();
 
   const [projects, setProjects] = useState([]);
-  const [myTasks, setMyTasks] = useState([]); // 👇 NEW: State for tasks
+  const [myTasks, setMyTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. Fetch Projects (Existing)
   const fetchProjects = async () => {
     try {
       const response = await api.get("/projects", {
@@ -25,7 +25,6 @@ const Dashboard = () => {
     }
   };
 
-  // 2. 👇 NEW: Fetch My Tasks
   const fetchMyTasks = async () => {
     if (!user?.id) return;
     try {
@@ -36,7 +35,6 @@ const Dashboard = () => {
     }
   };
 
-  // 3. Combined Data Loading & Listeners
   useEffect(() => {
     const initData = async () => {
       setLoading(true);
@@ -46,22 +44,36 @@ const Dashboard = () => {
 
     if (orgId) initData();
 
-    // Listen for global updates (from NewTaskModal)
+    // 2. ⚡ SOCKET: Listen for updates
+    const socket = getSocket();
+    
+    // Handler to refresh data
+    const handleUpdate = () => {
+      fetchMyTasks();
+      fetchProjects();
+    };
+
+    // Legacy listeners (Keep for local updates)
     window.addEventListener("taskUpdate", fetchMyTasks);
     window.addEventListener("projectUpdate", fetchProjects);
+
+    if (socket) {
+      // Refresh whenever a new notification arrives (Assignments, Project adds)
+      socket.on("notification:new", handleUpdate);
+    }
 
     return () => {
       window.removeEventListener("taskUpdate", fetchMyTasks);
       window.removeEventListener("projectUpdate", fetchProjects);
+      if (socket) socket.off("notification:new", handleUpdate);
     };
   }, [orgId, user?.id]);
 
-  // 4. Calculate Stats
+  // Calculate Stats
   const completedProjects = projects.filter(
     (p) => p.status === "COMPLETED"
   ).length;
 
-  // Calculate Overdue Tasks
   const overdueTasks = myTasks.filter((t) => {
     if (!t.dueDate || t.status === "Done") return false;
     return new Date(t.dueDate) < new Date();
@@ -88,7 +100,7 @@ const Dashboard = () => {
         </button>
       </div>
 
-      {/* Stats Grid - Now using Dynamic Data */}
+      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard
           label="Total Projects"
@@ -191,7 +203,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Right: My Tasks & Overdue - Now Dynamic */}
+        {/* Right: My Tasks & Overdue */}
         <div className="space-y-6">
           {/* My Tasks Widget */}
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
@@ -210,7 +222,6 @@ const Dashboard = () => {
                     onClick={() => navigate(`/tasks/${task._id}`)}
                   >
                     <TaskItem
-                      key={task._id}
                       title={task.title}
                       priority={task.priority}
                       type={task.type}
@@ -274,7 +285,6 @@ const StatCard = ({ label, value, sub, icon: Icon, color }) => (
   </div>
 );
 
-// Updated TaskItem to handle statuses
 const TaskItem = ({ title, priority, type = "TASK", status }) => {
   const getPriorityColor = (p) => {
     if (p === "HIGH") return "text-orange-400";

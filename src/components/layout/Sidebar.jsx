@@ -14,6 +14,7 @@ import {
   Bell
 } from "lucide-react";
 import api from "../../services/api";
+import { getSocket } from "../../services/socket"; // 1. Import socket
 
 function Sidebar() {
   const { user } = useUser();
@@ -25,14 +26,11 @@ function Sidebar() {
   const [pendingCount, setPendingCount] = useState(0);
   const [myTaskCount, setMyTaskCount] = useState(0);
 
-  const lastNotificationIdRef = useRef(null);
-
   // Permission Logic
   const isGlobalAdmin = user?.publicMetadata?.role === "admin";
   const isOrgAdmin = orgRole === "org:admin";
   const canCreateOrg = isGlobalAdmin || isOrgAdmin;
 
-  // 1. Fetch Projects
   const fetchSidebarProjects = async () => {
     if (!orgId) return; 
     try {
@@ -43,34 +41,12 @@ function Sidebar() {
     }
   };
 
-  // 2. Fetch Notification Count
   const fetchNotificationCounts = async () => {
     let total = 0;
     try {
       const userRes = await api.get("/notifications");
-      const notifications = userRes.data;
       const unreadCount = userRes.data.filter(n => !n.read).length;
       total += unreadCount;
-
-      if (notifications.length > 0) {
-        const latest = notifications[0]; // Assumes sorted by createdAt desc
-        
-        // If we have a new ID that is different from the last one we saw...
-        if (lastNotificationIdRef.current && lastNotificationIdRef.current !== latest._id && !latest.read) {
-          // Trigger the Toast Event
-          const event = new CustomEvent("show-toast", {
-            detail: { 
-              message: latest.message, 
-              link: "/notifications" 
-            }
-          });
-          window.dispatchEvent(event);
-        }
-        
-        // Update the ref
-        lastNotificationIdRef.current = latest._id;
-      }
-
     } catch (error) {
       console.error("User notification error:", error);
     }
@@ -79,13 +55,10 @@ function Sidebar() {
       try {
         const adminRes = await api.get("/admin-actions/pending", { params: { orgId } });
         total += adminRes.data.length;
-      } catch (error) {
-        // Ignore permission errors
-      }
+      } catch (error) { }
     }
     setPendingCount(total);
   };
-
 
   const fetchMyTaskCount = async () => {
     if (!user?.id) return;
@@ -102,15 +75,10 @@ function Sidebar() {
     fetchNotificationCounts(); 
     fetchMyTaskCount(); 
 
-    // Listeners for updates
+    // Listeners for updates (Legacy window events)
     window.addEventListener("projectUpdate", fetchSidebarProjects);
     window.addEventListener("notificationUpdate", fetchNotificationCounts);
     window.addEventListener("taskUpdate", fetchMyTaskCount);
-
-    const interval = setInterval(() => {
-      fetchNotificationCounts();
-      fetchMyTaskCount();
-    }, 10000);
 
     return () => {
       window.removeEventListener("projectUpdate", fetchSidebarProjects);
@@ -119,24 +87,43 @@ function Sidebar() {
     };
   }, [orgId, canCreateOrg, user?.id]); 
 
+  // 2. SOCKET: Listen for Live Notifications
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handleNotification = (newNotification) => {
+      // 1. Update count
+      setPendingCount((prev) => prev + 1);
+      
+      // 2. Show Toast
+      const event = new CustomEvent("show-toast", {
+        detail: { 
+          message: newNotification.message, 
+          link: "/notifications" 
+        }
+      });
+      window.dispatchEvent(event);
+    };
+
+    socket.on("notification:new", handleNotification);
+
+    return () => socket.off("notification:new", handleNotification);
+  }, []);
+
   const inviteCount = user?.emailAddresses?.reduce((acc, email) => {
     return acc + (email.invitations?.length || 0);
   }, 0) || 0;
 
-  // Navigation Logic
   const navItems = [
     ...(orgId ? [
       { icon: LayoutDashboard, label: "Dashboard", path: "/" },
       { icon: FolderKanban, label: "Projects", path: "/projects" },
       { icon: Users, label: "Team", path: "/team" }
     ] : []),
-    
     { icon: Mail, label: "Invitations", path: "/invitations", badge: inviteCount },
-    
     ...(orgId ? [{ icon: Bell, label: "Notifications", path: "/notifications", badge: pendingCount }] : []),
-
     ...(canCreateOrg ? [{ icon: Building, label: "Create Org", path: "/create-organization" }] : []),
-    
     { icon: Settings, label: "Settings", path: "/settings" },
   ];
 
@@ -178,7 +165,6 @@ function Sidebar() {
           />
         ))}
 
-        {/* My Task Section - Only show if in Org */}
         {orgId && (
           <div className="pt-6">
             <div className="px-3 mb-2 flex items-center justify-between group cursor-pointer">
@@ -186,7 +172,6 @@ function Sidebar() {
                 <CheckSquare size={18} />
                 <span className="text-sm font-medium">My Tasks</span>
               </div>
-              {/* 👇 UPDATED: Use dynamic count */}
               <span className="bg-neutral-800 text-neutral-400 text-xs px-2 py-0.5 rounded-full">
                 {myTaskCount}
               </span>

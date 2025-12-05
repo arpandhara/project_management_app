@@ -9,6 +9,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import api from "../../services/api";
+import { getSocket } from "../../services/socket"; // 1. Import socket
 
 const MemberDetails = () => {
   const { userId } = useParams();
@@ -37,34 +38,47 @@ const MemberDetails = () => {
     currentUser?.publicMetadata?.role === "admin";
   const targetIsAdmin = member?.role === "org:admin";
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!userId || !organization || !member) return;
+  const fetchData = async () => {
+    if (!userId || !organization || !member) return;
 
-      try {
-        const resProjects = await api.get("/projects", {
-          params: { orgId: organization.id, userId },
+    try {
+      const resProjects = await api.get("/projects", {
+        params: { orgId: organization.id, userId },
+      });
+      setProjects(resProjects.data);
+
+      const resTasks = await api.get(`/tasks/user/${userId}`);
+      setTasks(resTasks.data);
+
+      if (iAmAdmin) {
+        const resRequests = await api.get("/admin-actions/pending", {
+          params: { orgId: organization.id },
         });
-        setProjects(resProjects.data);
-
-        const resTasks = await api.get(`/tasks/user/${userId}`);
-        setTasks(resTasks.data);
-
-        if (iAmAdmin) {
-          const resRequests = await api.get("/admin-actions/pending", {
-            params: { orgId: organization.id },
-          });
-          setPendingRequests(resRequests.data);
-        }
-      } catch (err) {
-        console.error("Data load failed", err);
+        setPendingRequests(resRequests.data);
       }
-    };
+    } catch (err) {
+      console.error("Data load failed", err);
+    }
+  };
 
+  useEffect(() => {
     if (isLoaded) {
       fetchData();
     }
   }, [userId, organization, iAmAdmin, isLoaded, member]);
+
+  // 2. ⚡ SOCKET: Refresh when this user gets assigned tasks
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket || !userId) return;
+    
+    const handleUpdate = () => {
+        fetchData();
+    };
+
+    socket.on("notification:new", handleUpdate);
+    return () => socket.off("notification:new", handleUpdate);
+  }, [userId]);
 
   const handleKick = async () => {
     if (!window.confirm("Remove this user from organization?")) return;
@@ -139,7 +153,6 @@ const MemberDetails = () => {
 
         {iAmAdmin && !isMe && (
           <div className="flex flex-col gap-2">
-            {/* 1. Role Management Button (Demote vs Promote) */}
             {targetIsAdmin ? (
               <button
                 onClick={handleDemoteRequest}
@@ -168,7 +181,6 @@ const MemberDetails = () => {
               </button>
             )}
 
-            {/* 2. Kick Button - Now Visible for EVERYONE (Admins and Members) */}
             <button
               onClick={handleKick}
               className="bg-red-600/10 text-red-500 hover:bg-red-600/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
@@ -179,7 +191,6 @@ const MemberDetails = () => {
         )}
       </div>
 
-      {/* ... (Keep Pending Requests Alert and Projects/Tasks Grid exactly as is) ... */}
       {iAmAdmin && pendingRequests.some((r) => r.targetUserId === userId) && (
         <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl flex items-center justify-between">
           <div className="flex items-center gap-3">

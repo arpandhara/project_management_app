@@ -1,9 +1,10 @@
 import React, { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import { useAuth, ClerkLoaded, ClerkLoading } from "@clerk/clerk-react";
+import { useAuth, useUser, ClerkLoaded, ClerkLoading } from "@clerk/clerk-react"; // Added useUser
+import { connectSocket, disconnectSocket } from "./services/socket"; // Import service
 
 // Components
-import AuthLayout from "./components/layout/AuthLayout"; // Import the new wrapper
+import AuthLayout from "./components/layout/AuthLayout";
 import Dashboard from "./pages/dashboard/Dashboard";
 import ProjectList from "./pages/projects/ProjectList";
 import ProjectDetails from "./pages/projects/ProjectDetails";
@@ -16,15 +17,27 @@ import MemberDetails from "./pages/team/MemberDetails";
 import CreateOrganizationPage from "./pages/organization/CreateOrganizationPage";
 import Notifications from "./pages/notifications/Notifications";
 import TaskDetails from "./pages/tasks/TaskDetails";
-// API Helper
 import { setupInterceptors } from "./services/api";
 
 const App = () => {
-  const { getToken, isLoaded } = useAuth();
+  const { getToken } = useAuth();
+  const { user } = useUser(); // Get user details for socket setup
+
 
   useEffect(() => {
     setupInterceptors(getToken);
   }, [getToken]);
+
+  useEffect(() => {
+    if (user) {
+      connectSocket(user.id);
+    } else {
+      disconnectSocket();
+    }
+    
+    // Cleanup on unmount
+    return () => disconnectSocket();
+  }, [user]);
 
   return (
     <>

@@ -8,6 +8,7 @@ import {
 import { useUser, useAuth } from "@clerk/clerk-react"; 
 import NewTaskModal from "../../components/specific/NewTaskModal";
 import api from "../../services/api";
+import { getSocket } from "../../services/socket"; // 1. Import socket service
 
 const ProjectDetails = () => {
   const { id } = useParams();
@@ -22,7 +23,7 @@ const ProjectDetails = () => {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [newMemberEmail, setNewMemberEmail] = useState("");
 
-  // 👇 NEW: Filter State
+  // Filter State
   const [filters, setFilters] = useState({
     status: "All",
     type: "All",
@@ -32,6 +33,7 @@ const ProjectDetails = () => {
 
   const isAdmin = user?.publicMetadata?.role === "admin" || orgRole === "org:admin";
 
+  // Initial Data Fetch
   const fetchData = async () => {
     try {
       const projRes = await api.get(`/projects/${id}`);
@@ -51,6 +53,50 @@ const ProjectDetails = () => {
     fetchData();
   }, [id]);
 
+  // 2. SOCKET: Listen for Live Updates
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    // Join this project's room
+    socket.emit("join_project", `project_${id}`);
+
+    // Define handlers
+    const handleTaskCreated = (newTask) => {
+      console.log("New Task Received via Socket:", newTask);
+      
+      // Safety Check: Ensure valid ID exists
+      if (!newTask || !newTask._id) return;
+
+      setTasks((prev) => {
+        // Avoid duplicates
+        if (prev.find(t => t._id === newTask._id)) return prev;
+        return [newTask, ...prev];
+      });
+    };
+
+    const handleTaskUpdated = (updatedTask) => {
+      setTasks((prev) => prev.map(t => t._id === updatedTask._id ? updatedTask : t));
+    };
+
+    const handleTaskDeleted = (deletedTaskId) => {
+      setTasks((prev) => prev.filter(t => t._id !== deletedTaskId));
+    };
+
+    // Attach listeners
+    socket.on("task:created", handleTaskCreated);
+    socket.on("task:updated", handleTaskUpdated);
+    socket.on("task:deleted", handleTaskDeleted);
+
+    // Cleanup: Leave room on unmount
+    return () => {
+      socket.emit("leave_project", `project_${id}`);
+      socket.off("task:created", handleTaskCreated);
+      socket.off("task:updated", handleTaskUpdated);
+      socket.off("task:deleted", handleTaskDeleted);
+    };
+  }, [id]);
+
   const handleAddMember = async (e) => {
     e.preventDefault();
     if (!newMemberEmail) return;
@@ -66,13 +112,13 @@ const ProjectDetails = () => {
     }
   };
 
-  // 👇 NEW: Filter Logic
+  // Filter Logic
   const filteredTasks = tasks.filter(task => {
     const matchStatus = filters.status === "All" || task.status === filters.status;
     const matchType = filters.type === "All" || task.type === filters.type;
     const matchPriority = filters.priority === "All" || task.priority === filters.priority;
     
-    // Assignee check: "All" or if the selected ID exists in the task's assignees array
+    // Assignee check
     const matchAssignee = filters.assignee === "All" || (task.assignees && task.assignees.includes(filters.assignee));
 
     return matchStatus && matchType && matchPriority && matchAssignee;
@@ -83,7 +129,6 @@ const ProjectDetails = () => {
   const priorityOptions = ["All", "HIGH", "MEDIUM", "LOW"];
   const typeOptions = ["All", "TASK", "BUG", "IMPROVEMENT", "DESIGN", "CONTENT_WRITING", "SOCIAL_MEDIA", "OTHER"];
   
-  // Create Assignee Options: Label = Name, Value = ID
   const assigneeOptions = [
     { label: "All Assignees", value: "All" },
     ...members.map(m => ({ label: `${m.firstName} ${m.lastName}`, value: m.clerkId }))
@@ -198,10 +243,9 @@ const ProjectDetails = () => {
           options={assigneeOptions} 
           value={filters.assignee} 
           onChange={(val) => setFilters({...filters, assignee: val})} 
-          isObjectOptions={true} // Special flag for Assignees because options are objects {label, value}
+          isObjectOptions={true} 
         />
         
-        {/* Reset Button (only show if filters are active) */}
         {(filters.status !== "All" || filters.type !== "All" || filters.priority !== "All" || filters.assignee !== "All") && (
           <button 
             onClick={() => setFilters({ status: "All", type: "All", priority: "All", assignee: "All" })}
@@ -223,10 +267,9 @@ const ProjectDetails = () => {
         </div>
 
         <div>
-          {/* 👇 UPDATED: Mapping filteredTasks instead of tasks */}
           {filteredTasks.length > 0 ? (
             filteredTasks.map((task) => (
-              <div key={task._id} onClick={() => navigate(`/tasks/${task._id}`)} className="grid grid-cols-12 gap-4 p-4 border-b border-neutral-800/50 hover:bg-neutral-800/50 transition-colors items-center text-sm last:border-0">
+              <div key={task._id} onClick={() => navigate(`/tasks/${task._id}`)} className="grid grid-cols-12 gap-4 p-4 border-b border-neutral-800/50 hover:bg-neutral-800/50 transition-colors items-center text-sm last:border-0 cursor-pointer">
                 
                 {/* Title & Color Dot */}
                 <div className="col-span-5 flex items-center gap-3">
@@ -290,12 +333,14 @@ const ProjectDetails = () => {
         onClose={() => setIsTaskModalOpen(false)} 
         projectId={id} 
         projectMembers={members} 
-        onTaskCreated={() => fetchData()} 
+        // 3. Update: No need to re-fetch manually, socket handles it!
+        onTaskCreated={() => {}} 
       />
     </div>
   );
 };
 
+// Helper Components
 const ProjectStat = ({ label, value, icon: Icon, color = "text-white" }) => (
   <div className="bg-neutral-900 border border-neutral-800 p-4 rounded-xl flex items-center justify-between">
     <div>
@@ -313,7 +358,6 @@ const TabButton = ({ icon: Icon, label, active }) => (
   </button>
 );
 
-// 👇 NEW: Interactive Filter Dropdown
 const FilterDropdown = ({ label, options, value, onChange, isObjectOptions = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -329,11 +373,11 @@ const FilterDropdown = ({ label, options, value, onChange, isObjectOptions = fal
   }, []);
 
   const getLabel = () => {
-    if (value === "All") return `All ${label}s`; // e.g. "All Statuses"
+    if (value === "All") return `All ${label}s`;
     if (isObjectOptions) {
       return options.find(o => o.value === value)?.label || value;
     }
-    return value.replace("_", " "); // Clean up "SOCIAL_MEDIA" -> "SOCIAL MEDIA"
+    return value.replace("_", " ");
   };
 
   return (

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { Check, X, UserMinus, Trash2, Bell, Info } from "lucide-react"; 
 import api from "../../services/api";
+import { getSocket } from "../../services/socket"; // 1. Import socket
 
 const Notifications = () => {
   const { orgId, orgRole } = useAuth();
@@ -14,7 +15,7 @@ const Notifications = () => {
   const fetchData = async () => {
     setLoading(true);
 
-    // 1. Admin Actions (Only if Org Admin)
+    // 1. Admin Actions
     if (orgRole === "org:admin") {
       try {
         const adminRes = await api.get("/admin-actions/pending", { params: { orgId } });
@@ -24,7 +25,7 @@ const Notifications = () => {
       }
     }
 
-    // 2. User Notifications (Everyone)
+    // 2. User Notifications
     try {
       const userRes = await api.get("/notifications");
       setUserNotifications(userRes.data || []);
@@ -39,7 +40,6 @@ const Notifications = () => {
     const init = async () => {
       if (orgId) await fetchData(); 
       
-      // Mark as read immediately on open
       try {
         await api.put("/notifications/mark-read");
         window.dispatchEvent(new Event("notificationUpdate"));
@@ -50,6 +50,24 @@ const Notifications = () => {
     init();
   }, [orgId, orgRole]);
 
+  // 3. ⚡ SOCKET: Listen for new notifications live
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handleNewNotification = (newNote) => {
+      // Prepend to list instantly
+      setUserNotifications((prev) => [newNote, ...prev]);
+      
+      // Auto-mark as read since we are looking at the page? 
+      // Optional, but might be nice. For now just show it.
+    };
+
+    socket.on("notification:new", handleNewNotification);
+
+    return () => socket.off("notification:new", handleNewNotification);
+  }, []);
+
   // Handle Task Invite Response
   const handleInviteResponse = async (noteId, action) => {
     try {
@@ -57,9 +75,7 @@ const Notifications = () => {
         notificationId: noteId,
         action: action // 'ACCEPT' or 'DECLINE'
       });
-      // Remove from UI
       setUserNotifications((prev) => prev.filter(n => n._id !== noteId));
-      // Trigger global update (Sidebar badge & My Tasks count)
       window.dispatchEvent(new Event("notificationUpdate"));
       window.dispatchEvent(new Event("taskUpdate")); 
     } catch (error) {
@@ -129,7 +145,7 @@ const Notifications = () => {
           <p className="text-neutral-500 text-sm italic">No new messages.</p>
         ) : (
           userNotifications.map((note) => (
-            <div key={note._id} className="bg-neutral-900 border border-neutral-800 p-4 rounded-xl flex items-center justify-between">
+            <div key={note._id} className="bg-neutral-900 border border-neutral-800 p-4 rounded-xl flex items-center justify-between animate-in slide-in-from-top-2 duration-200">
               <div className="flex items-center gap-4">
                 <div className="bg-blue-500/10 p-2 rounded-lg text-blue-500">
                   <Info size={20} />
@@ -137,7 +153,6 @@ const Notifications = () => {
                 <p className="text-white text-sm">{note.message}</p>
               </div>
               
-              {/* 👇 Logic for Different Notification Types */}
               {note.type === 'TASK_INVITE' ? (
                 <div className="flex gap-2">
                   <button
@@ -166,7 +181,7 @@ const Notifications = () => {
         )}
       </div>
 
-      {/* Admin Requests (Only render if requests exist) */}
+      {/* Admin Requests */}
       {adminRequests.length > 0 && (
         <div className="space-y-4 pt-6 border-t border-neutral-800">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -188,7 +203,6 @@ const Notifications = () => {
                   </div>
                </div>
                
-               {/* Action Buttons */}
                {req.requesterUserId !== user.id ? (
                 <div className="flex gap-3">
                   <button onClick={() => handleApprove(req)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"><Check size={16}/> Approve</button>
