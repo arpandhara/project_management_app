@@ -46,9 +46,10 @@ const Dashboard = () => {
 
     // 2. ⚡ SOCKET: Listen for updates
     const socket = getSocket();
-    
+
     // Handler to refresh data
     const handleUpdate = () => {
+      console.log("⚡ Dashboard refreshing due to socket event...");
       fetchMyTasks();
       fetchProjects();
     };
@@ -60,12 +61,18 @@ const Dashboard = () => {
     if (socket) {
       // Refresh whenever a new notification arrives (Assignments, Project adds)
       socket.on("notification:new", handleUpdate);
+      socket.on("dashboard:update", handleUpdate);
+      socket.on("project:deleted", handleUpdate);
     }
 
     return () => {
       window.removeEventListener("taskUpdate", fetchMyTasks);
       window.removeEventListener("projectUpdate", fetchProjects);
-      if (socket) socket.off("notification:new", handleUpdate);
+      if (socket) {
+        socket.off("notification:new", handleUpdate);
+        socket.off("dashboard:update", handleUpdate);
+        socket.off("project:deleted", handleUpdate);
+      }
     };
   }, [orgId, user?.id]);
 

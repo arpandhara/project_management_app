@@ -92,24 +92,33 @@ function Sidebar() {
     const socket = getSocket();
     if (!socket) return;
 
+    // A. Join Organization Room when orgId changes
+    if (orgId) {
+      socket.emit("join_org", orgId);
+    }
+
+    // B. Handle Notification (Existing)
     const handleNotification = (newNotification) => {
-      // 1. Update count
       setPendingCount((prev) => prev + 1);
-      
-      // 2. Show Toast
       const event = new CustomEvent("show-toast", {
-        detail: { 
-          message: newNotification.message, 
-          link: "/notifications" 
-        }
+        detail: { message: newNotification.message, link: "/notifications" }
       });
       window.dispatchEvent(event);
     };
 
-    socket.on("notification:new", handleNotification);
+    // C. ⭐ NEW: Handle Project Deletion (Update Sidebar List)
+    const handleProjectDeleted = (deletedProjectId) => {
+      setProjects((prev) => prev.filter(p => (p._id || p.id) !== deletedProjectId));
+    };
 
-    return () => socket.off("notification:new", handleNotification);
-  }, []);
+    socket.on("notification:new", handleNotification);
+    socket.on("project:deleted", handleProjectDeleted);
+
+    return () => {
+      socket.off("notification:new", handleNotification);
+      socket.off("project:deleted", handleProjectDeleted);
+    };
+  }, [orgId]);
 
   const inviteCount = user?.emailAddresses?.reduce((acc, email) => {
     return acc + (email.invitations?.length || 0);

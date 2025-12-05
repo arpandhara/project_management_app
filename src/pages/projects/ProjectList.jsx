@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { useUser, useAuth } from "@clerk/clerk-react";
 import NewProjectModal from "../../components/specific/NewProjectModal";
 import api from "../../services/api";
+import { getSocket } from "../../services/socket";
 
 const ProjectList = () => {
   const navigate = useNavigate();
@@ -41,6 +42,22 @@ const ProjectList = () => {
   useEffect(() => {
     fetchProjects();
   }, [orgId]);
+
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handleProjectDeleted = (deletedProjectId) => {
+      setProjects((prev) => prev.filter(p => (p._id || p.id) !== deletedProjectId));
+    };
+
+    socket.on("project:deleted", handleProjectDeleted);
+
+    return () => {
+      socket.off("project:deleted", handleProjectDeleted);
+    };
+  }, []);
 
   // Handle Delete
   const handleDelete = async (e, projectId) => {
