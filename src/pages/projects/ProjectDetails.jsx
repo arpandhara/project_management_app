@@ -2,14 +2,14 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, Plus, LayoutList, Calendar as CalendarIcon, 
-  BarChart2, Settings, User, Zap, CheckCircle2, Clock, 
+  Settings, User, Zap, CheckCircle2, Clock, 
   Users, UserPlus, ChevronDown, X
 } from "lucide-react";
 import { useUser, useAuth } from "@clerk/clerk-react"; 
 import NewTaskModal from "../../components/specific/NewTaskModal";
 import api from "../../services/api";
 import { getSocket } from "../../services/socket";
-import ProjectEvents from "./ProjectEvents"; // 👈 New Import
+import ProjectEvents from "./ProjectEvents"; 
 
 const ProjectDetails = () => {
   const { id } = useParams();
@@ -24,7 +24,6 @@ const ProjectDetails = () => {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [newMemberEmail, setNewMemberEmail] = useState("");
   
-  // 👇 State for Tab Switching
   const [activeTab, setActiveTab] = useState("tasks");
 
   // Filter State
@@ -84,8 +83,8 @@ const ProjectDetails = () => {
 
     const handleProjectMemberRemoved = (removedUserId) => {
        if (removedUserId === user.id) {
-          alert("You have been removed from this project.");
-          navigate("/projects");
+         alert("You have been removed from this project.");
+         navigate("/projects");
        }
        setMembers(prev => prev.filter(m => m.clerkId !== removedUserId));
     };
@@ -230,16 +229,14 @@ const ProjectDetails = () => {
           icon={CalendarIcon} 
           label="Calendar" 
         />
-        <TabButton icon={BarChart2} label="Analytics" /> {/* Placeholder */}
         
-        {isAdmin && (
-          <button 
-            onClick={() => navigate(`/projects/${id}/settings`)}
-            className="flex items-center gap-2 pb-3 border-b-2 border-transparent text-neutral-400 hover:text-white ml-auto transition-colors"
-          >
-            <Settings size={16} /> Settings
-          </button>
-        )}
+        {/* Settings Button: Removed isAdmin check so it always appears */}
+        <button 
+          onClick={() => navigate(`/projects/${id}/settings`)}
+          className="flex items-center gap-2 pb-3 border-b-2 border-transparent text-neutral-400 hover:text-white ml-auto transition-colors"
+        >
+          <Settings size={16} /> Settings
+        </button>
       </div>
 
       {/* Conditional Content Rendering */}

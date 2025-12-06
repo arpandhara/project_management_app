@@ -87,6 +87,7 @@ const App = () => {
             />
             <Route path="notifications" element={<Notifications />} />
             <Route path="tasks/:taskId" element={<TaskDetails />} />
+            <Route path="/projects/:id/settings" element={<ProjectSettings />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
