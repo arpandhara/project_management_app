@@ -1,32 +1,70 @@
 import React, { useState, useEffect } from "react";
-import { Search, UserPlus, Users, Activity, Shield, Mail } from "lucide-react";
+import { Search, UserPlus, Users, Shield, Mail } from "lucide-react";
 import { useOrganization, useUser } from "@clerk/clerk-react"; 
-import { useNavigate } from "react-router-dom"; // Import useNavigate
+import { useNavigate } from "react-router-dom";
 import InviteMemberModal from "../../components/specific/InviteMemberModal";
+import { getSocket } from "../../services/socket";
 
 const TeamList = () => {
-  const { organization, isLoaded, memberships } = useOrganization({
-    memberships: {
-      pageSize: 10,
-      keepPreviousData: true,
-    },
-  });
+  const { organization, isLoaded } = useOrganization();
   const { user } = useUser(); 
-  const navigate = useNavigate(); // Initialize navigation hook
+  const navigate = useNavigate();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState(""); // Search State
+  const [searchTerm, setSearchTerm] = useState("");
+  
+  // Local state to hold members, allowing manual refreshes via socket
+  const [members, setMembers] = useState([]);
 
-  // Check if current user is admin
-  const isAdmin = memberships?.data?.find(mem => mem.publicUserData.userId === user?.id)?.role === "org:admin";
+  // 1. Function to fetch members manually
+  const fetchMembers = async () => {
+    if (!organization) return;
+    setLoading(true);
+    try {
+        // Fetch up to 50 members (adjust pagination as needed)
+        const res = await organization.getMemberships({ pageSize: 50 });
+        setMembers(res.data);
+    } catch (error) {
+        console.error("Failed to load members", error);
+    } finally {
+        setLoading(false);
+    }
+  };
 
+  // 2. Initial Data Load
   useEffect(() => {
-    if (isLoaded) setLoading(false);
-  }, [isLoaded, memberships]);
+    if (isLoaded) {
+        if (organization) {
+            fetchMembers();
+        } else {
+            setLoading(false);
+        }
+    }
+  }, [isLoaded, organization]);
+
+  // 3. ⚡ SOCKET LISTENER: Listen for 'team:update' events
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handleTeamUpdate = () => {
+        console.log("Team update received via socket. Refreshing list...");
+        fetchMembers();
+    };
+
+    socket.on("team:update", handleTeamUpdate);
+
+    return () => {
+        socket.off("team:update", handleTeamUpdate);
+    };
+  }, [organization]);
+
+  // Check if current user is admin based on the fetched list
+  const isAdmin = members.find(mem => mem.publicUserData.userId === user?.id)?.role === "org:admin";
 
   // Filter Logic for Search
-  const filteredMembers = memberships?.data?.filter(mem => {
+  const filteredMembers = members.filter(mem => {
     const fullName = `${mem.publicUserData.firstName} ${mem.publicUserData.lastName}`.toLowerCase();
     const email = mem.publicUserData.identifier.toLowerCase();
     const search = searchTerm.toLowerCase();
@@ -65,9 +103,27 @@ const TeamList = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <TeamStat label="Total Members" value={memberships?.count || 0} icon={Users} color="text-blue-500" bg="bg-blue-500/10" />
-        <TeamStat label="Pending Invites" value={organization?.pendingInvitationsCount || 0} icon={Mail} color="text-orange-500" bg="bg-orange-500/10" />
-        <TeamStat label="Admins" value={memberships?.data?.filter(m => m.role === 'org:admin').length || 0} icon={Shield} color="text-purple-500" bg="bg-purple-500/10" />
+        <TeamStat 
+            label="Total Members" 
+            value={members.length} 
+            icon={Users} 
+            color="text-blue-500" 
+            bg="bg-blue-500/10" 
+        />
+        <TeamStat 
+            label="Pending Invites" 
+            value={organization.pendingInvitationsCount || 0} 
+            icon={Mail} 
+            color="text-orange-500" 
+            bg="bg-orange-500/10" 
+        />
+        <TeamStat 
+            label="Admins" 
+            value={members.filter(m => m.role === 'org:admin').length} 
+            icon={Shield} 
+            color="text-purple-500" 
+            bg="bg-purple-500/10" 
+        />
       </div>
 
       {/* Search Bar */}
@@ -76,7 +132,7 @@ const TeamList = () => {
         <input
           type="text"
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)} // Bind input to state
+          onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Search team members..."
           className="w-full bg-neutral-900 border border-neutral-800 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-blue-600 text-white placeholder-neutral-500"
         />
@@ -90,12 +146,11 @@ const TeamList = () => {
           <div className="col-span-3 text-right">Role</div>
         </div>
 
-        {/* Table Body - Using filteredMembers */}
+        {/* Table Body */}
         <div>
-          {filteredMembers?.map((mem) => (
+          {filteredMembers.map((mem) => (
             <div 
               key={mem.id}
-              // 👇 This navigates to the Member Details page when clicked
               onClick={() => navigate(`/team/${mem.publicUserData.userId}`)} 
               className="grid grid-cols-12 gap-4 p-4 border-b border-neutral-800/50 hover:bg-neutral-800/50 transition-colors items-center text-sm last:border-0 cursor-pointer"
             >
@@ -124,9 +179,8 @@ const TeamList = () => {
               </div>
             </div>
           ))}
-          {/* Show message if search yields no results */}
-          {filteredMembers?.length === 0 && (
-             <div className="p-4 text-center text-neutral-500 text-sm">No members found.</div>
+          {filteredMembers.length === 0 && (
+             <div className="p-4 text-center text-neutral-500 text-sm">No members found matching your search.</div>
           )}
         </div>
       </div>
@@ -136,7 +190,7 @@ const TeamList = () => {
   );
 };
 
-// Reusable Stat Card
+// Reusable Stat Card Component
 const TeamStat = ({ label, value, icon: Icon, color, bg }) => (
   <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-xl flex justify-between items-center">
     <div>

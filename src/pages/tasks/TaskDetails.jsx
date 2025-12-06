@@ -27,6 +27,7 @@ const TaskDetails = () => {
   const { orgRole } = useAuth();
 
   const [task, setTask] = useState(null);
+  const [stableProjectId, setStableProjectId] = useState(null);
   const [projectMembers, setProjectMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -66,6 +67,8 @@ const TaskDetails = () => {
       try {
         const taskRes = await api.get(`/tasks/${taskId}`);
         setTask(taskRes.data);
+        const pId = taskRes.data.projectId?._id || taskRes.data.projectId;
+        setStableProjectId(pId);
         if (taskRes.data.projectId) {
           const pid = taskRes.data.projectId._id || taskRes.data.projectId;
           const memRes = await api.get(`/projects/${pid}/members`);
@@ -84,16 +87,20 @@ const TaskDetails = () => {
   // ⚡ SOCKET Listener
   useEffect(() => {
     const socket = getSocket();
-    if (!socket || !task) return;
+    if (!socket || !stableProjectId) return; // Depend on stable ID
 
-    const projectId = task.projectId._id || task.projectId;
-    const room = `project_${projectId}`;
-
+    const room = `project_${stableProjectId}`;
     socket.emit("join_project", room);
 
     const handleTaskUpdated = (updatedTask) => {
       if (updatedTask._id === taskId) {
-        setTask(updatedTask);
+        setTask((prev) => ({
+            ...updatedTask,
+            // Preserve the populated project object if backend sent a string ID
+            projectId: typeof updatedTask.projectId === 'string' && prev?.projectId 
+                ? prev.projectId 
+                : updatedTask.projectId
+        }));
       }
     };
 
@@ -102,7 +109,7 @@ const TaskDetails = () => {
     return () => {
       socket.off("task:updated", handleTaskUpdated);
     };
-  }, [taskId, task?.projectId]);
+  }, [taskId, stableProjectId]);
 
   const handleUpdate = async (field, value) => {
     try {

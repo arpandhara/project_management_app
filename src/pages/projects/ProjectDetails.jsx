@@ -63,7 +63,7 @@ const ProjectDetails = () => {
 
     // Define handlers
     const handleTaskCreated = (newTask) => {
-      console.log("New Task Received via Socket:", newTask);
+      // console.log("New Task Received via Socket:", newTask);
       
       // Safety Check: Ensure valid ID exists
       if (!newTask || !newTask._id) return;

@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import { useAuth, useUser, ClerkLoaded, ClerkLoading } from "@clerk/clerk-react"; // Added useUser
-import { connectSocket, disconnectSocket } from "./services/socket"; // Import service
+import { useAuth, useUser, ClerkLoaded, ClerkLoading } from "@clerk/clerk-react"; 
+import { connectSocket, disconnectSocket } from "./services/socket"; 
 
 // Components
 import AuthLayout from "./components/layout/AuthLayout";
@@ -21,23 +21,32 @@ import { setupInterceptors } from "./services/api";
 
 const App = () => {
   const { getToken } = useAuth();
-  const { user } = useUser(); // Get user details for socket setup
+  const { user } = useUser(); 
 
-
+  // 1. Setup API Interceptors (Run once or when token changes)
   useEffect(() => {
     setupInterceptors(getToken);
   }, [getToken]);
 
+  // 2. SOCKET Connection & Session Refresh Logic
   useEffect(() => {
-    if (user) {
-      connectSocket(user.id);
-    } else {
-      disconnectSocket();
+    if (user?.id) {
+      // Connect to socket with User ID
+      const socket = connectSocket(user.id);
+
+      // ⭐ Listen for forced session refresh (e.g., Promotion to Admin)
+      // This allows the user to see admin buttons instantly without reloading
+      socket.on("session:refresh", async () => {
+          console.log("🔄 Session refresh requested. Reloading user data...");
+          await user.reload(); 
+      });
+
+      return () => {
+          socket.off("session:refresh");
+          disconnectSocket();
+      };
     }
-    
-    // Cleanup on unmount
-    return () => disconnectSocket();
-  }, [user]);
+  }, [user?.id]); // ⚠️ CRITICAL FIX: Only run when ID changes, not the whole user object
 
   return (
     <>
