@@ -1,7 +1,12 @@
 import React, { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import { useAuth, useUser, ClerkLoaded, ClerkLoading } from "@clerk/clerk-react"; 
-import { connectSocket, disconnectSocket } from "./services/socket"; 
+import {
+  useAuth,
+  useUser,
+  ClerkLoaded,
+  ClerkLoading,
+} from "@clerk/clerk-react";
+import { connectSocket, disconnectSocket } from "./services/socket";
 
 // Components
 import AuthLayout from "./components/layout/AuthLayout";
@@ -18,10 +23,12 @@ import CreateOrganizationPage from "./pages/organization/CreateOrganizationPage"
 import Notifications from "./pages/notifications/Notifications";
 import TaskDetails from "./pages/tasks/TaskDetails";
 import { setupInterceptors } from "./services/api";
+import ProjectSettings from "./pages/projects/ProjectSettings";
+// import { uploadFile } from "./services/supabase";
 
 const App = () => {
   const { getToken } = useAuth();
-  const { user } = useUser(); 
+  const { user } = useUser();
 
   // 1. Setup API Interceptors (Run once or when token changes)
   useEffect(() => {
@@ -37,16 +44,16 @@ const App = () => {
       // ⭐ Listen for forced session refresh (e.g., Promotion to Admin)
       // This allows the user to see admin buttons instantly without reloading
       socket.on("session:refresh", async () => {
-          console.log("🔄 Session refresh requested. Reloading user data...");
-          await user.reload(); 
+        console.log("🔄 Session refresh requested. Reloading user data...");
+        await user.reload();
       });
 
       return () => {
-          socket.off("session:refresh");
-          disconnectSocket();
+        socket.off("session:refresh");
+        disconnectSocket();
       };
     }
-  }, [user?.id]); // ⚠️ CRITICAL FIX: Only run when ID changes, not the whole user object
+  }, [user?.id]);
 
   return (
     <>
@@ -74,7 +81,10 @@ const App = () => {
             <Route path="settings" element={<Settings />} />
             <Route path="invitations" element={<Invitations />} />
             <Route path="team/:userId" element={<MemberDetails />} />
-            <Route path="create-organization" element={<CreateOrganizationPage />} />
+            <Route
+              path="create-organization"
+              element={<CreateOrganizationPage />}
+            />
             <Route path="notifications" element={<Notifications />} />
             <Route path="tasks/:taskId" element={<TaskDetails />} />
           </Route>
