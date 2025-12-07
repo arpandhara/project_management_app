@@ -14,6 +14,13 @@ const Dashboard = () => {
   const [myTasks, setMyTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // 👇 Redirect to Settings if no Org selected (Personal Account)
+  useEffect(() => {
+    if (!orgId) {
+      navigate("/settings");
+    }
+  }, [orgId, navigate]);
+
   const fetchProjects = async () => {
     try {
       const response = await api.get("/projects", {
@@ -36,13 +43,15 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
+    if (!orgId) return; // Skip fetching if redirecting
+
     const initData = async () => {
       setLoading(true);
       await Promise.all([fetchProjects(), fetchMyTasks()]);
       setLoading(false);
     };
 
-    if (orgId) initData();
+    initData();
 
     // 2. ⚡ SOCKET: Listen for updates
     const socket = getSocket();
@@ -75,6 +84,8 @@ const Dashboard = () => {
       }
     };
   }, [orgId, user?.id]);
+
+  if (!orgId) return null; // Prevent flash of content before redirect
 
   // Calculate Stats
   const completedProjects = projects.filter(

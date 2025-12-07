@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Trash2, AlertTriangle, Loader2, ShieldAlert } from "lucide-react";
 import api from "../../services/api";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth, useUser } from "@clerk/clerk-react";
 
 const ProjectSettings = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { userId } = useAuth();
+  const { orgRole } = useAuth();
+  const { user } = useUser();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -16,6 +17,9 @@ const ProjectSettings = () => {
     description: "",
     status: "ACTIVE",
   });
+
+  // Check Admin Status
+  const isAdmin = user?.publicMetadata?.role === "admin" || orgRole === "org:admin";
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -34,8 +38,9 @@ const ProjectSettings = () => {
         setIsLoading(false);
       }
     };
-    fetchProject();
-  }, [id, navigate]);
+    if (isAdmin) fetchProject();
+    else setIsLoading(false);
+  }, [id, navigate, isAdmin]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -70,6 +75,27 @@ const ProjectSettings = () => {
       }
     }
   };
+
+  // 👇 Access Denied View
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+        <div className="bg-red-500/10 p-4 rounded-full">
+          <ShieldAlert size={48} className="text-red-500" />
+        </div>
+        <h2 className="text-2xl font-bold text-white">Access Restricted</h2>
+        <p className="text-neutral-400 max-w-md">
+          Only administrators can modify project settings or delete projects. Please contact your organization admin.
+        </p>
+        <button 
+          onClick={() => navigate(`/projects/${id}`)}
+          className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg transition-colors border border-neutral-700"
+        >
+          Go Back
+        </button>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

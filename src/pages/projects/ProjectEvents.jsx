@@ -4,13 +4,19 @@ import { Video, Calendar, Plus, ExternalLink, Clock } from "lucide-react";
 import Modal from "../../components/common/Modal";
 import api from "../../services/api";
 import { getSocket } from "../../services/socket";
+import { useAuth, useUser } from "@clerk/clerk-react"; // Import Auth
 
 const ProjectEvents = () => {
   const { id } = useParams();
+  const { orgRole } = useAuth();
+  const { user } = useUser();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ title: "", startDate: "", meetLink: "" });
+
+  // Admin Check
+  const isAdmin = user?.publicMetadata?.role === "admin" || orgRole === "org:admin";
 
   const fetchEvents = async () => {
     try {
@@ -42,7 +48,7 @@ const ProjectEvents = () => {
       setIsModalOpen(false);
       setFormData({ title: "", startDate: "", meetLink: "" });
     } catch (error) {
-      alert("Failed to create event");
+      alert("Failed to create event. Ensure you are an admin.");
     }
   };
 
@@ -52,9 +58,11 @@ const ProjectEvents = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold text-white">Upcoming Meetings</h3>
-        <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2">
-          <Plus size={16} /> Schedule
-        </button>
+        {isAdmin && (
+          <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2">
+            <Plus size={16} /> Schedule
+          </button>
+        )}
       </div>
 
       <div className="grid gap-4">
