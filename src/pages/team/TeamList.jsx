@@ -14,6 +14,8 @@ const TeamList = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   // Local state to hold members, allowing manual refreshes via socket
   const [members, setMembers] = useState([]);
@@ -23,7 +25,6 @@ const TeamList = () => {
     if (!organization) return;
     setLoading(true);
     try {
-      // Fetch up to 50 members (adjust pagination as needed)
       const res = await organization.getMemberships({ pageSize: 50 });
       setMembers(res.data);
     } catch (error) {
@@ -44,7 +45,7 @@ const TeamList = () => {
     }
   }, [isLoaded, organization]);
 
-  // 3. ⚡ SOCKET LISTENER: Listen for 'team:update' events
+  // 3. Socket Listener
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
@@ -61,17 +62,23 @@ const TeamList = () => {
     };
   }, [organization]);
 
-  // Check if current user is admin based on the fetched list
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 300); // Wait 300ms after user stops typing
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   const isAdmin =
     members.find((mem) => mem.publicUserData.userId === user?.id)?.role ===
     "org:admin";
 
-  // Filter Logic for Search
   const filteredMembers = members.filter((mem) => {
     const fullName =
       `${mem.publicUserData.firstName} ${mem.publicUserData.lastName}`.toLowerCase();
     const email = mem.publicUserData.identifier.toLowerCase();
-    const search = searchTerm.toLowerCase();
+    const search = debouncedSearch.toLowerCase(); // Use debounced value
     return fullName.includes(search) || email.includes(search);
   });
 
@@ -219,7 +226,6 @@ const TeamList = () => {
   );
 };
 
-// Reusable Stat Card Component
 const TeamStat = ({ label, value, icon: Icon, color, bg }) => (
   <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-xl flex justify-between items-center">
     <div>

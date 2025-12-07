@@ -17,14 +17,16 @@ import {
 } from "lucide-react";
 import api from "../../services/api";
 import { getSocket } from "../../services/socket"; 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 function Sidebar() {
   const { user } = useUser();
   const { signOut } = useClerk();
   const { orgId, orgRole } = useAuth(); 
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   
-  const [projects, setProjects] = useState([]);
+  // const [projects, setProjects] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [myTaskCount, setMyTaskCount] = useState(0);
 
@@ -35,8 +37,16 @@ function Sidebar() {
   const isOrgAdmin = orgRole === "org:admin";
   const canCreateOrg = isGlobalAdmin || isOrgAdmin;
 
-  // 1. Static Nav Items Animation (Run ONCE on mount)
-  // We use fromTo to ensure stability during strict mode/refreshes
+  const { data: projects = [] } = useQuery({
+    queryKey: ["projects", orgId], // Unique key for this data
+    queryFn: async () => {
+      const response = await api.get("/projects", { params: { orgId } });
+      return Array.isArray(response.data) ? response.data : [];
+    },
+    enabled: !!orgId, // Only fetch if we have an Org ID
+    staleTime: 1000 * 60 * 5, // Cache data for 5 minutes (prevents refetching on every render)
+  });
+
   useGSAP(() => {
     gsap.fromTo(".nav-item", 
       { x: -20, opacity: 0 }, 
@@ -53,16 +63,6 @@ function Sidebar() {
       );
     }
   }, { scope: sidebarRef, dependencies: [projects] });
-
-  const fetchSidebarProjects = async () => {
-    if (!orgId) return; 
-    try {
-      const response = await api.get("/projects", { params: { orgId } });
-      setProjects(Array.isArray(response.data) ? response.data : []);
-    } catch (error) {
-      console.error("Sidebar project fetch error:", error);
-    }
-  };
 
   const fetchNotificationCounts = async () => {
     let total = 0;
@@ -94,17 +94,18 @@ function Sidebar() {
   };
 
   useEffect(() => {
-    fetchSidebarProjects();
     fetchNotificationCounts(); 
     fetchMyTaskCount(); 
 
+    const invalidateProjects = () => queryClient.invalidateQueries(["projects", orgId]);
+
     // Listeners for updates (Legacy window events)
-    window.addEventListener("projectUpdate", fetchSidebarProjects);
+    window.addEventListener("projectUpdate", invalidateProjects);
     window.addEventListener("notificationUpdate", fetchNotificationCounts);
     window.addEventListener("taskUpdate", fetchMyTaskCount);
 
     return () => {
-      window.removeEventListener("projectUpdate", fetchSidebarProjects);
+      window.removeEventListener("projectUpdate", invalidateProjects);
       window.removeEventListener("notificationUpdate", fetchNotificationCounts);
       window.removeEventListener("taskUpdate", fetchMyTaskCount);
     };
@@ -129,9 +130,11 @@ function Sidebar() {
       window.dispatchEvent(event);
     };
 
-    // C. ⭐ NEW: Handle Project Deletion (Update Sidebar List)
     const handleProjectDeleted = (deletedProjectId) => {
-      setProjects((prev) => prev.filter(p => (p._id || p.id) !== deletedProjectId));
+      queryClient.setQueryData(["projects", orgId], (oldData) => {
+        if (!oldData) return [];
+        return oldData.filter((p) => (p._id || p.id) !== deletedProjectId);
+      });
     };
 
     socket.on("notification:new", handleNotification);
