@@ -24,6 +24,7 @@ import Notifications from "./pages/notifications/Notifications";
 import TaskDetails from "./pages/tasks/TaskDetails";
 import { setupInterceptors } from "./services/api";
 import ProjectSettings from "./pages/projects/ProjectSettings";
+import NotFound from "./pages/NotFound";
 // import { uploadFile } from "./services/supabase";
 
 const App = () => {
@@ -90,7 +91,7 @@ const App = () => {
             <Route path="/projects/:id/settings" element={<ProjectSettings />} />
           </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ClerkLoaded>
     </>

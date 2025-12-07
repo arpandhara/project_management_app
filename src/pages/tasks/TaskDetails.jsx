@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, Calendar, FileText, X, Trash2, Check, 
+  ArrowLeft, FileText, X, Trash2, Check, 
   ChevronDown, UserPlus, MessageSquare, Send, 
-  AlertCircle, CheckCircle, Upload, Link as LinkIcon, Github, Image as ImageIcon
+  AlertCircle, CheckCircle, Upload, Link as LinkIcon, 
+  Github, Image as ImageIcon, VenetianMask // 👈 Added VenetianMask for the funny UI
 } from "lucide-react";
 import { useUser, useAuth } from "@clerk/clerk-react";
 import api from "../../services/api";
@@ -20,7 +21,7 @@ const TaskDetails = () => {
   const [activities, setActivities] = useState([]); 
   const [projectMembers, setProjectMembers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(null); // 👈 Tracks access errors
 
   // Approval UI State
   const [approvalComment, setApprovalComment] = useState("");
@@ -30,8 +31,8 @@ const TaskDetails = () => {
   // Inputs
   const [commentText, setCommentText] = useState("");
   
-  // 👇 NEW: Attachment UI State
-  const [attachmentMode, setAttachmentMode] = useState("LINK"); // 'LINK' or 'FILE'
+  // Attachment UI State
+  const [attachmentMode, setAttachmentMode] = useState("LINK"); 
   const [newLink, setNewLink] = useState({ name: "", url: "", type: "DOC" });
   const [isUploading, setIsUploading] = useState(false);
   const attachmentFileRef = useRef(null);
@@ -138,7 +139,7 @@ const TaskDetails = () => {
   const handleAddLink = async () => {
     if (!newLink.name || !newLink.url) return;
     const updatedAttachments = [...(task.attachments || []), newLink];
-    await handleUpdate("attachments", updatedAttachments); // Regular update for links
+    await handleUpdate("attachments", updatedAttachments); 
     setNewLink({ name: "", url: "", type: "DOC" });
   };
 
@@ -155,11 +156,9 @@ const TaskDetails = () => {
 
     setIsUploading(true);
     try {
-      // A. Upload to Supabase
       const { url, error } = await uploadFile(file);
       if (error) throw error;
 
-      // B. Save Activity (This also pushes to task.attachments in backend)
       await api.post(`/tasks/${taskId}/activity`, {
         type: "UPLOAD",
         content: "Uploaded a file",
@@ -281,6 +280,33 @@ const TaskDetails = () => {
   );
 
   if (loading) return <div className="p-8 text-neutral-400">Loading...</div>;
+
+  // 👇 HUMOROUS ACCESS DENIED SCREEN
+  if (error && (error.includes("Access Denied") || error.includes("403"))) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-8 text-center animate-in fade-in zoom-in duration-300">
+        <div className="bg-red-500/10 p-6 rounded-full mb-6 border border-red-500/20 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
+           <VenetianMask size={64} className="text-red-500" />
+        </div>
+        <h1 className="text-3xl font-bold text-white mb-3">
+          Access Denied! 🕵️‍♂️
+        </h1>
+        <p className="text-neutral-400 text-lg max-w-md leading-relaxed mb-8">
+          Hmmm... <span className="text-red-400 font-medium">Why are you trying to peek in someone else's task?</span> 🌚
+          <br/>
+          This task is classified. If you're supposed to be here, better ask for an invite!
+        </p>
+        <button 
+          onClick={() => navigate(-1)}
+          className="bg-neutral-800 hover:bg-neutral-700 text-white px-6 py-3 rounded-xl font-medium transition-all border border-neutral-700 hover:border-neutral-600 flex items-center gap-2"
+        >
+          <ArrowLeft size={18} />
+          Back to Safety
+        </button>
+      </div>
+    );
+  }
+
   if (!task) return <div className="p-8 text-neutral-400">Task not found</div>;
 
   return (
@@ -359,13 +385,12 @@ const TaskDetails = () => {
             </div>
           )}
 
-          {/* 👇 UPDATED ATTACHMENTS SECTION */}
+          {/* ATTACHMENTS SECTION */}
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
               <LinkIcon size={20} /> Attachments
             </h2>
             
-            {/* List */}
             <div className="space-y-3 mb-6">
               {task.attachments && task.attachments.length > 0 ? (
                 task.attachments.map((link, idx) => (
@@ -428,7 +453,7 @@ const TaskDetails = () => {
             </div>
           </div>
 
-          {/* Activity Feed (Stripped of Upload Button) */}
+          {/* Activity Feed */}
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 flex flex-col h-[500px]">
             <h3 className="text-white font-bold mb-4 flex items-center gap-2 shrink-0">
               <MessageSquare size={18} /> Activity & Comments
