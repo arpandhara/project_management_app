@@ -1,6 +1,8 @@
 import React, { useState, useEffect , useRef } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useClerk, useAuth, OrganizationSwitcher, useUser } from "@clerk/clerk-react";
+import gsap from "gsap"; 
+import { useGSAP } from "@gsap/react"; 
 import {
   LayoutDashboard,
   FolderKanban,
@@ -14,7 +16,7 @@ import {
   Bell
 } from "lucide-react";
 import api from "../../services/api";
-import { getSocket } from "../../services/socket"; // 1. Import socket
+import { getSocket } from "../../services/socket"; 
 
 function Sidebar() {
   const { user } = useUser();
@@ -26,10 +28,31 @@ function Sidebar() {
   const [pendingCount, setPendingCount] = useState(0);
   const [myTaskCount, setMyTaskCount] = useState(0);
 
+  const sidebarRef = useRef(null);
+
   // Permission Logic
   const isGlobalAdmin = user?.publicMetadata?.role === "admin";
   const isOrgAdmin = orgRole === "org:admin";
   const canCreateOrg = isGlobalAdmin || isOrgAdmin;
+
+  // 1. Static Nav Items Animation (Run ONCE on mount)
+  // We use fromTo to ensure stability during strict mode/refreshes
+  useGSAP(() => {
+    gsap.fromTo(".nav-item", 
+      { x: -20, opacity: 0 }, 
+      { x: 0, opacity: 1, duration: 0.4, stagger: 0.05, ease: "power2.out", delay: 0.2 }
+    );
+  }, { scope: sidebarRef }); // Empty dependency array implied
+
+  // 2. Project List Animation (Run when projects change)
+  useGSAP(() => {
+    if (projects.length > 0) {
+      gsap.fromTo(".project-item", 
+        { x: -20, opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.5, stagger: 0.05, ease: "power2.out" }
+      );
+    }
+  }, { scope: sidebarRef, dependencies: [projects] });
 
   const fetchSidebarProjects = async () => {
     if (!orgId) return; 
@@ -137,7 +160,7 @@ function Sidebar() {
   ];
 
   return (
-    <aside className="w-64 bg-neutral-900 border-r border-neutral-800 flex flex-col h-screen left-0 top-0">
+    <aside ref={sidebarRef} className="w-64 bg-neutral-900 border-r border-neutral-800 flex flex-col h-screen left-0 top-0">
       <div className="w-full p-4 border-b border-neutral-800 flex justify-center">
         <OrganizationSwitcher
           appearance={{
@@ -176,7 +199,7 @@ function Sidebar() {
 
         {orgId && (
           <div className="pt-6">
-            <div className="px-3 mb-2 flex items-center justify-between group cursor-pointer">
+            <div className="px-3 mb-2 flex items-center justify-between group cursor-pointer nav-item">
               <div className="flex items-center gap-2 text-neutral-400 hover:text-white transition-colors">
                 <CheckSquare size={18} />
                 <span className="text-sm font-medium">My Tasks</span>
@@ -192,7 +215,7 @@ function Sidebar() {
       <div className="px-4 pb-2">
         <button
           onClick={() => signOut()}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-red-400 hover:bg-neutral-800/50 hover:text-red-300 transition-colors cursor-pointer"
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-red-400 hover:bg-neutral-800/50 hover:text-red-300 transition-colors cursor-pointer nav-item"
         >
           <LogOut size={18} className="mr-3" />
           Logout
@@ -238,7 +261,7 @@ const SidebarItem = ({ to, icon: Icon, label, badge }) => (
   <NavLink
     to={to}
     className={({ isActive }) =>
-      `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+      `nav-item flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
         isActive
           ? "bg-blue-600/10 text-blue-400 font-medium"
           : "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200"

@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
 import { Folder, CheckCircle, Clock, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "../../services/api";
 import { useAuth, useUser } from "@clerk/clerk-react";
-import { getSocket } from "../../services/socket"; // 1. Import socket
+import { getSocket } from "../../services/socket";
+import PageTransition from "../../components/common/PageTransition";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -14,7 +17,43 @@ const Dashboard = () => {
   const [myTasks, setMyTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 👇 Redirect to Settings if no Org selected (Personal Account)
+  const containerRef = useRef(null);
+
+  useGSAP(
+    () => {
+      // 1. Safety Check: If the component returned null (no orgId), stop here.
+      if (!containerRef.current) return;
+
+      // 2. Use a Timeline for sequencing
+      const tl = gsap.timeline({ delay: 0.2 }); // Wait 0.2s for PageTransition to settle
+
+      // Animate Stat Cards (Sequence)
+      tl.from(".stat-card", {
+        y: 30,
+        opacity: 0,
+        duration: 0.5,
+        stagger: 0.1, // 0.1s delay between each card start
+        ease: "back.out(1.7)", // Bounce effect
+        clearProps: "all" // Cleanup after animation
+      });
+
+      // Animate Main Content Areas (Slide in after cards)
+      tl.from(".dashboard-section", {
+        x: -15,
+        opacity: 0,
+        duration: 0.5,
+        stagger: 0.15,
+        ease: "power2.out",
+        clearProps: "all"
+      }, "-=0.2"); // Overlap slightly (start 0.2s before cards finish)
+    },
+    { 
+      scope: containerRef, 
+      dependencies: [orgId] // 3. Re-run animation when orgId loads and view renders
+    }
+  );
+
+  // Redirect to Settings if no Org selected (Personal Account)
   useEffect(() => {
     if (!orgId) {
       navigate("/settings");
@@ -98,192 +137,202 @@ const Dashboard = () => {
   });
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold">
-            Welcome back, {user?.firstName}
-          </h1>
-          <p className="text-neutral-400 mt-1">
-            Here's what's happening with your projects today.
-          </p>
-        </div>
-
-        <button
-          onClick={() => navigate("/settings")}
-          className="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors border border-neutral-700"
-        >
-          My Profile
-        </button>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard
-          label="Total Projects"
-          value={projects.length}
-          sub="projects in Cloud Ops"
-          icon={Folder}
-          color="bg-blue-500/10 text-blue-500"
-        />
-        <StatCard
-          label="Completed"
-          value={completedProjects}
-          sub="of total projects"
-          icon={CheckCircle}
-          color="bg-green-500/10 text-green-500"
-        />
-        <StatCard
-          label="My Tasks"
-          value={myTasks.length}
-          sub="assigned to me"
-          icon={Clock}
-          color="bg-purple-500/10 text-purple-500"
-        />
-        <StatCard
-          label="Overdue"
-          value={overdueTasks.length}
-          sub="needs attention"
-          icon={AlertTriangle}
-          color="bg-orange-500/10 text-orange-500"
-        />
-      </div>
-
-      {/* Main Content Split */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left: Project Overview */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex justify-between items-end">
-            <h2 className="text-lg font-semibold">Project Overview</h2>
-            <button
-              onClick={() => navigate("/projects")}
-              className="text-xs text-neutral-400 hover:text-white"
-            >
-              View all →
-            </button>
+    <PageTransition>
+      <div className="space-y-8">
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold">
+              Welcome back, {user?.firstName}
+            </h1>
+            <p className="text-neutral-400 mt-1">
+              Here's what's happening with your projects today.
+            </p>
           </div>
 
-          <div className="space-y-4">
-            {loading ? (
-              <div className="text-neutral-500 text-sm">
-                Loading projects...
-              </div>
-            ) : projects.length > 0 ? (
-              projects.slice(0, 3).map((project) => (
-                <div
-                  key={project._id || project.id}
-                  onClick={() =>
-                    navigate(`/projects/${project._id || project.id}`)
-                  }
-                  className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 hover:border-neutral-700 transition-colors cursor-pointer group"
-                >
-                  <div className="flex justify-between mb-2">
-                    <h3 className="font-semibold text-lg text-white group-hover:text-blue-400 transition-colors">
-                      {project.title}
-                    </h3>
-                    <span className="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded font-medium">
-                      {project.status || "ACTIVE"}
-                    </span>
-                  </div>
+          <button
+            onClick={() => navigate("/settings")}
+            className="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors border border-neutral-700"
+          >
+            My Profile
+          </button>
+        </div>
 
-                  <p className="text-neutral-400 text-sm mb-4 line-clamp-2">
-                    {project.description}
-                  </p>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="stat-card">
+            <StatCard
+              label="Total Projects"
+              value={projects.length}
+              sub="projects in Cloud Ops"
+              icon={Folder}
+              color="bg-blue-500/10 text-blue-500"
+            />
+          </div>
+          <div className="stat-card">
+            <StatCard
+              label="Completed"
+              value={completedProjects}
+              sub="of total projects"
+              icon={CheckCircle}
+              color="bg-green-500/10 text-green-500"
+            />
+          </div>
+          <div className="stat-card">
+            <StatCard
+              label="My Tasks"
+              value={myTasks.length}
+              sub="assigned to me"
+              icon={Clock}
+              color="bg-purple-500/10 text-purple-500"
+            />
+          </div>
+          <div className="stat-card">
+            <StatCard
+              label="Overdue"
+              value={overdueTasks.length}
+              sub="needs attention"
+              icon={AlertTriangle}
+              color="bg-orange-500/10 text-orange-500"
+            />
+          </div>
+        </div>
 
-                  <div className="flex items-center justify-between text-xs text-neutral-500 mt-4">
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`font-bold ${
-                          project.priority === "HIGH"
-                            ? "text-orange-400"
-                            : "text-neutral-400"
-                        }`}
-                      >
-                        {project.priority || "MEDIUM"}
-                      </span>
-                      <span>
-                        • Created{" "}
-                        {new Date(project.createdAt).toLocaleDateString()}
+        {/* Main Content Split */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left: Project Overview */}
+          <div className="lg:col-span-2 space-y-6 dashboard-section">
+            <div className="flex justify-between items-end">
+              <h2 className="text-lg font-semibold">Project Overview</h2>
+              <button
+                onClick={() => navigate("/projects")}
+                className="text-xs text-neutral-400 hover:text-white"
+              >
+                View all →
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {loading ? (
+                <div className="text-neutral-500 text-sm">
+                  Loading projects...
+                </div>
+              ) : projects.length > 0 ? (
+                projects.slice(0, 3).map((project) => (
+                  <div
+                    key={project._id || project.id}
+                    onClick={() =>
+                      navigate(`/projects/${project._id || project.id}`)
+                    }
+                    className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 hover:border-neutral-700 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex justify-between mb-2">
+                      <h3 className="font-semibold text-lg text-white group-hover:text-blue-400 transition-colors">
+                        {project.title}
+                      </h3>
+                      <span className="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded font-medium">
+                        {project.status || "ACTIVE"}
                       </span>
                     </div>
+
+                    <p className="text-neutral-400 text-sm mb-4 line-clamp-2">
+                      {project.description}
+                    </p>
+
+                    <div className="flex items-center justify-between text-xs text-neutral-500 mt-4">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`font-bold ${
+                            project.priority === "HIGH"
+                              ? "text-orange-400"
+                              : "text-neutral-400"
+                          }`}
+                        >
+                          {project.priority || "MEDIUM"}
+                        </span>
+                        <span>
+                          • Created{" "}
+                          {new Date(project.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-neutral-800 h-1.5 rounded-full mt-3">
+                      <div className="bg-blue-500 h-1.5 rounded-full w-[25%]"></div>
+                    </div>
                   </div>
-                  <div className="w-full bg-neutral-800 h-1.5 rounded-full mt-3">
-                    <div className="bg-blue-500 h-1.5 rounded-full w-[25%]"></div>
-                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-500">
+                  No projects yet. Create one to get started!
                 </div>
-              ))
-            ) : (
-              <div className="p-8 text-center bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-500">
-                No projects yet. Create one to get started!
+              )}
+            </div>
+          </div>
+
+          {/* Right: My Tasks & Overdue */}
+          <div className="space-y-6 dashboard-section">
+            {/* My Tasks Widget */}
+            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-semibold text-sm">My Tasks</h3>
+                <span className="bg-blue-500/20 text-blue-400 text-xs px-1.5 py-0.5 rounded">
+                  {myTasks.length}
+                </span>
               </div>
-            )}
-          </div>
-        </div>
 
-        {/* Right: My Tasks & Overdue */}
-        <div className="space-y-6">
-          {/* My Tasks Widget */}
-          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-sm">My Tasks</h3>
-              <span className="bg-blue-500/20 text-blue-400 text-xs px-1.5 py-0.5 rounded">
-                {myTasks.length}
-              </span>
+              <div className="space-y-3">
+                {myTasks.length > 0 ? (
+                  myTasks.slice(0, 5).map((task) => (
+                    <div
+                      key={task._id}
+                      onClick={() => navigate(`/tasks/${task._id}`)}
+                    >
+                      <TaskItem
+                        title={task.title}
+                        priority={task.priority}
+                        type={task.type}
+                        status={task.status}
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-neutral-500 text-center py-2">
+                    No tasks assigned.
+                  </p>
+                )}
+              </div>
             </div>
 
-            <div className="space-y-3">
-              {myTasks.length > 0 ? (
-                myTasks.slice(0, 5).map((task) => (
-                  <div
-                    key={task._id}
-                    onClick={() => navigate(`/tasks/${task._id}`)}
-                  >
-                    <TaskItem
-                      title={task.title}
-                      priority={task.priority}
-                      type={task.type}
-                      status={task.status}
-                    />
-                  </div>
-                ))
-              ) : (
-                <p className="text-xs text-neutral-500 text-center py-2">
-                  No tasks assigned.
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Overdue Widget */}
-          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-sm">Overdue</h3>
-              <span className="bg-red-500/20 text-red-400 text-xs px-1.5 py-0.5 rounded">
-                {overdueTasks.length}
-              </span>
-            </div>
-            <div className="space-y-3">
-              {overdueTasks.length > 0 ? (
-                overdueTasks.slice(0, 3).map((task) => (
-                  <div
-                    key={task._id}
-                    className="text-xs text-red-400 border border-red-900/30 bg-red-900/10 p-2 rounded flex justify-between"
-                  >
-                    <span className="truncate">{task.title}</span>
-                    <span>{new Date(task.dueDate).toLocaleDateString()}</span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-xs text-neutral-500 text-center py-2 opacity-60">
-                  No overdue tasks
-                </p>
-              )}
+            {/* Overdue Widget */}
+            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-semibold text-sm">Overdue</h3>
+                <span className="bg-red-500/20 text-red-400 text-xs px-1.5 py-0.5 rounded">
+                  {overdueTasks.length}
+                </span>
+              </div>
+              <div className="space-y-3">
+                {overdueTasks.length > 0 ? (
+                  overdueTasks.slice(0, 3).map((task) => (
+                    <div
+                      key={task._id}
+                      className="text-xs text-red-400 border border-red-900/30 bg-red-900/10 p-2 rounded flex justify-between"
+                    >
+                      <span className="truncate">{task.title}</span>
+                      <span>{new Date(task.dueDate).toLocaleDateString()}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-neutral-500 text-center py-2 opacity-60">
+                    No overdue tasks
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </PageTransition>
   );
 };
 
