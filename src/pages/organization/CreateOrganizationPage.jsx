@@ -14,7 +14,7 @@ const CreateOrganizationPage = () => {
             headerSubtitle: "text-neutral-400",
             formFieldLabel: "text-neutral-300",
             formFieldInput: "bg-neutral-950 border-neutral-800 text-white",
-            formButtonPrimary: "bg-blue-600 hover:bg-blue-500",
+            formButtonPrimary: "!bg-white !text-neutral-950 hover:!bg-neutral-200",
           }
         }}
       />

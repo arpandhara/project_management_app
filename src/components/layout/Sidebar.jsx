@@ -11,7 +11,7 @@ import {
   CheckSquare,
   Plus,
   LogOut,
-  Mail,
+
   Building, 
   Bell
 } from "lucide-react";
@@ -146,9 +146,7 @@ function Sidebar() {
     };
   }, [orgId]);
 
-  const inviteCount = user?.emailAddresses?.reduce((acc, email) => {
-    return acc + (email.invitations?.length || 0);
-  }, 0) || 0;
+
 
   const navItems = [
     ...(orgId ? [
@@ -156,7 +154,7 @@ function Sidebar() {
       { icon: FolderKanban, label: "Projects", path: "/projects" },
       { icon: Users, label: "Team", path: "/team" }
     ] : []),
-    { icon: Mail, label: "Invitations", path: "/invitations", badge: inviteCount },
+
     ...(orgId ? [{ icon: Bell, label: "Notifications", path: "/notifications", badge: pendingCount }] : []),
     ...(canCreateOrg ? [{ icon: Building, label: "Create Org", path: "/create-organization" }] : []),
     { icon: Settings, label: "Settings", path: "/settings" },
@@ -174,6 +172,8 @@ function Sidebar() {
               organizationPreviewText: "font-medium text-sm text-white",
               organizationSwitcherTriggerIcon: "text-neutral-400",
               organizationSwitcherPopoverCard: "bg-neutral-900 border border-neutral-800",
+              organizationSwitcherPopoverActionButton: "!bg-white !text-neutral-950 hover:!bg-neutral-200",
+              organizationSwitcherInvitationAcceptButton: "!bg-white !text-neutral-950 hover:!bg-neutral-200",
               userPreviewTextContainer: "ml-2 text-white",
               userPreviewText: "font-medium text-sm text-white",
               userPreviewSecondaryText: "text-neutral-400",

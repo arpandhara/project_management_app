@@ -20,7 +20,7 @@ const TeamList = lazy(() => import("./pages/team/TeamList"));
 const Settings = lazy(() => import("./pages/settings/Settings"));
 const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
 const SignUpPage = lazy(() => import("./pages/auth/SignUpPage"));
-const Invitations = lazy(() => import("./pages/team/Invitations"));
+
 const MemberDetails = lazy(() => import("./pages/team/MemberDetails"));
 const CreateOrganizationPage = lazy(() => import("./pages/organization/CreateOrganizationPage"));
 const Notifications = lazy(() => import("./pages/notifications/Notifications"));
@@ -82,7 +82,7 @@ const App = () => {
               <Route path="projects/:id" element={<ProjectDetails />} />
               <Route path="team" element={<TeamList />} />
               <Route path="settings" element={<Settings />} />
-              <Route path="invitations" element={<Invitations />} />
+
               <Route path="team/:userId" element={<MemberDetails />} />
               <Route
                 path="create-organization"

@@ -48,10 +48,13 @@ const TeamList = () => {
   // 3. Socket Listener
   useEffect(() => {
     const socket = getSocket();
-    if (!socket) return;
+    if (!socket || !organization) return;
+
+    // Explicitly join the org room to ensure updates are received
+    socket.emit("join_org", organization.id);
 
     const handleTeamUpdate = () => {
-      console.log("Team update received via socket. Refreshing list...");
+      console.log("🚀 Frontend: Team update received via socket. Refreshing list...");
       fetchMembers();
     };
 
